@@ -559,3 +559,23 @@ func TestDecodeNode(t *testing.T) {
 		decodeNode(hash, elems)
 	}
 }
+
+func ExamplePrint() {
+	trie := newEmpty()
+	vals := []struct{ k, v string }{
+		{"do", "verb"},
+		{"ether", "wookiedoo"},
+		{"horse", "stallion"},
+		{"shaman", "horse"},
+		{"doge", "coin"},
+		{"dog", "puppy"},
+		{"somethingveryoddindeedthis is", "myothernodedata"},
+	}
+	for _, val := range vals {
+		updateString(trie, val.k, val.v)
+	}
+
+	trie.Print()
+
+	// output: 1
+}

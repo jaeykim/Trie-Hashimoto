@@ -431,3 +431,7 @@ func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
 	defer returnHasherToPool(h)
 	return h.hash(t.root, db, true)
 }
+
+func (t *Trie) Print() {
+	fmt.Println(t.root.fstring(""))
+}
