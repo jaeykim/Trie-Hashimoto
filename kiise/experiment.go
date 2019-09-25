@@ -29,7 +29,7 @@ func main() {
 	secureTrie := trie.NewEmptySecure()
 
 	sizeCheckEpoch := 100000
-	accountsNum := 10
+	accountsNum := 10100001
 	emptyStateDB := &state.StateDB{}
 	emptyAccount := state.Account{}
 	trieCommitEpoch := 100
@@ -61,10 +61,15 @@ func main() {
 		}
 
 		// make random address
-		randHex := randomHex(20)
-		fmt.Println("random hex string:", randHex)
+		//randHex := randomHex(20)
+		//fmt.Println("random hex string:", randHex)
+
+		// make incremental hex
+		randHex := fmt.Sprintf("%x", i) // make int as hex string
+		//fmt.Println("address hex string:", randHex)
+
 		randAddr := common.HexToAddress(randHex)
-		fmt.Println("random addr:", randAddr.Hex())
+		//fmt.Println("insert account addr:", randAddr.Hex())
 
 		// encoding value
 		emptyStateObject := state.NewObject(emptyStateDB, randAddr, emptyAccount)
