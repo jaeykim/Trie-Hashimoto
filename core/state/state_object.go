@@ -122,6 +122,24 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 	}
 }
 
+// NewObject creates a state object.
+func NewObject(db *StateDB, address common.Address, data Account) *stateObject {
+	if data.Balance == nil {
+		data.Balance = new(big.Int)
+	}
+	if data.CodeHash == nil {
+		data.CodeHash = emptyCodeHash
+	}
+	return &stateObject{
+		db:            db,
+		address:       address,
+		addrHash:      crypto.Keccak256Hash(address[:]),
+		data:          data,
+		originStorage: make(Storage),
+		dirtyStorage:  make(Storage),
+	}
+}
+
 // EncodeRLP implements rlp.Encoder.
 func (s *stateObject) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, s.data)
