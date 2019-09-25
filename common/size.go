@@ -54,3 +54,11 @@ func (s StorageSize) TerminalString() string {
 		return fmt.Sprintf("%.2fB", s)
 	}
 }
+
+func (s StorageSize) Float() float64 {
+	return float64(s)
+}
+
+func (s StorageSize) Int() int64 {
+	return int64(s.Float())
+}
