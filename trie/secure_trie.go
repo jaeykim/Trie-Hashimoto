@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -193,4 +194,13 @@ func (t *SecureTrie) getSecKeyCache() map[string][]byte {
 		t.secKeyCache = make(map[string][]byte)
 	}
 	return t.secKeyCache
+}
+
+func NewEmptySecure() *SecureTrie {
+	trie, _ := NewSecure(common.Hash{}, NewDatabase(memorydb.New()))
+	return trie
+}
+
+func (t *SecureTrie) Trie() *Trie {
+	return &t.trie
 }
