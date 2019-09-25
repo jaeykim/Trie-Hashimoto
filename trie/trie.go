@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -434,4 +435,15 @@ func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
 
 func (t *Trie) Print() {
 	fmt.Println(t.root.fstring(""))
+}
+
+func (t *Trie) Size() common.StorageSize {
+	size, _ := t.db.Size()
+	return size
+}
+
+// Used for testing
+func NewEmpty() *Trie {
+	trie, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
+	return trie
 }
