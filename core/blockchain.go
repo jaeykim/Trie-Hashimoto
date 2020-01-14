@@ -42,7 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -620,6 +620,11 @@ func (bc *BlockChain) insert(block *types.Block) {
 
 		bc.currentFastBlock.Store(block)
 		headFastBlockGauge.Update(int64(block.NumberU64()))
+	}
+
+	// print database inspecting result per size check epoch
+	if block.Number().Uint64()%common.InspectingDatabaseEpoch == 0 {
+		rawdb.InspectDatabase(rawdb.GlobalDB)
 	}
 }
 
