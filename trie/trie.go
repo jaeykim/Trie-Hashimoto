@@ -433,10 +433,6 @@ func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
 	return h.hash(t.root, db, true)
 }
 
-func (t *Trie) Print() {
-	fmt.Println(t.root.fstring(""))
-}
-
 func (t *Trie) Size() common.StorageSize {
 	size, _ := t.db.Size()
 	return size
@@ -449,6 +445,9 @@ func NewEmpty() *Trie {
 }
 
 // print trie nodes details in human readable form (jmlee)
-func (t *Trie) Info() {
+// func (t *Trie) Print() {
+// 	fmt.Println(t.root.fstring(""))
+// }
+func (t *Trie) Print() {
 	fmt.Println(t.root.infostring("", t.db))
 }
