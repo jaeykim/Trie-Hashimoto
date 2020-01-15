@@ -100,6 +100,7 @@ type rawNode []byte
 func (n rawNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
 func (n rawNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
 func (n rawNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
+func (n rawNode) infostring(ind string, db *Database) string     { panic("this should never end up in a live trie") } // (jmlee)
 
 // rawFullNode represents only the useful data content of a full node, with the
 // caches and flags stripped out to minimize its data storage. This type honors
@@ -109,6 +110,7 @@ type rawFullNode [17]node
 func (n rawFullNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
 func (n rawFullNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
 func (n rawFullNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
+func (n rawFullNode) infostring(ind string, db *Database) string     { panic("this should never end up in a live trie") } // (jmlee)
 
 func (n rawFullNode) EncodeRLP(w io.Writer) error {
 	var nodes [17]node
@@ -134,6 +136,7 @@ type rawShortNode struct {
 func (n rawShortNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
 func (n rawShortNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
 func (n rawShortNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
+func (n rawShortNode) infostring(ind string, db *Database) string     { panic("this should never end up in a live trie") } // (jmlee)
 
 // cachedNode is all the information we know about a single cached node in the
 // memory database write layer.
