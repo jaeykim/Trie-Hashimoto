@@ -85,9 +85,9 @@ func main() {
 
 	// print trie nodes
 	fmt.Println("\nprint norm trie")
-	normTrie.Info()
+	normTrie.Print()
 	fmt.Println("\nprint secure trie")
-	secureTrie.Trie().Info()
+	secureTrie.Trie().Print()
 
 
 }
