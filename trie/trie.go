@@ -447,3 +447,8 @@ func NewEmpty() *Trie {
 	trie, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
 	return trie
 }
+
+// print trie nodes details in human readable form (jmlee)
+func (t *Trie) Info() {
+	fmt.Println(t.root.infostring("", t.db))
+}
