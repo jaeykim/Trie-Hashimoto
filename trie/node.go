@@ -21,7 +21,7 @@ import (
 	"io"
 	"strings"
 	"math/big"
-
+	
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -32,17 +32,21 @@ type node interface {
 	fstring(string) string
 	infostring(string, *Database) string // print node details in human readable form (jmlee)
 	cache() (hashNode, bool)
+	setNonce(uint64) // set node's nonce (jmlee)
+	getNonce() uint64 // get node's nonce (jmlee)
 }
 
 type (
-	fullNode struct {	// branch node
+	fullNode struct { // branch node
 		Children [17]node // Actual trie node data to encode/decode (needs custom encoder)
 		flags    nodeFlag
+		Nonce    uint64 // to change node's hash for impt mining (jmlee)
 	}
-	shortNode struct {	// extension node or leaf node
+	shortNode struct { // extension node or leaf node
 		Key   []byte
 		Val   node
 		flags nodeFlag
+		Nonce uint64 // to change node's hash for impt mining (jmlee)
 	}
 	hashNode  []byte
 	valueNode []byte
@@ -79,6 +83,16 @@ func (n *fullNode) cache() (hashNode, bool)  { return n.flags.hash, n.flags.dirt
 func (n *shortNode) cache() (hashNode, bool) { return n.flags.hash, n.flags.dirty }
 func (n hashNode) cache() (hashNode, bool)   { return nil, true }
 func (n valueNode) cache() (hashNode, bool)  { return nil, true }
+
+func (n *fullNode) setNonce(newNonce uint64) { n.Nonce =  newNonce; n.flags.dirty = true; n.flags.hash = nil; n.flags.hash = rehash(n).(hashNode) } // should be set flags.hash to nil to be rehashed (jmlee)
+func (n *shortNode) setNonce(newNonce uint64) { n.Nonce =  newNonce; n.flags.dirty = true; n.flags.hash = nil; n.flags.hash = rehash(n).(hashNode) }// should be set flags.hash to nil to be rehashed (jmlee)
+func (n hashNode) setNonce(newNonce uint64)   { return }
+func (n valueNode) setNonce(newNonce uint64)  { return }
+
+func (n *fullNode) getNonce() uint64 { return n.Nonce }
+func (n *shortNode) getNonce() uint64 { return n.Nonce }
+func (n hashNode) getNonce() uint64 { return 0 } // return meaningless value (jmlee)
+func (n valueNode) getNonce() uint64 { return 0 } // return meaningless value (jmlee)
 
 // Pretty printing.
 func (n *fullNode) String() string  { return n.fstring("") }
@@ -149,13 +163,13 @@ func decodeShort(hash, elems []byte) (node, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid value node: %v", err)
 		}
-		return &shortNode{key, append(valueNode{}, val...), flag}, nil
+		return &shortNode{key, append(valueNode{}, val...), flag, 0}, nil
 	}
 	r, _, err := decodeRef(rest)
 	if err != nil {
 		return nil, wrapError(err, "val")
 	}
-	return &shortNode{key, r, flag}, nil
+	return &shortNode{key, r, flag, 0}, nil
 }
 
 func decodeFull(hash, elems []byte) (*fullNode, error) {
@@ -229,12 +243,13 @@ func (err *decodeError) Error() string {
 // print node details in human readable form (jmlee)
 func (n *fullNode) infostring(ind string, db *Database) string {
 	// print branch node
-	resp := fmt.Sprintf("[\n")
+	hn, _ := n.cache()
+	resp := fmt.Sprintf("[\n%s branch node hash: %s (nonce: %d)\n", ind, common.BytesToHash(hn).Hex(), n.getNonce())
 	for i, node := range &n.Children {
-		if node != nil{
+		if node != nil {
 			resp += fmt.Sprintf("%s branch '%s': \n", ind, indices[i])
 			resp += fmt.Sprintf("%s	%v\n", ind, node.infostring(ind+"	", db))
-		} 
+		}
 	}
 	return resp + fmt.Sprintf("\n%s] ", ind)
 }
@@ -242,7 +257,9 @@ func (n *shortNode) infostring(ind string, db *Database) string {
 	// print extension or leaf node
 	// if n.Val is branch node, then this node is extension node & n.Key is common prefix
 	// if n.Val is account, then this node is leaf node & n.Key is left address of the account (along the path)
-	return fmt.Sprintf("{key: %x - value: %v} ", n.Key, n.Val.infostring(ind+"  ", db))
+
+	hn, _ := n.cache()
+	return fmt.Sprintf("{hash: %s (nonce: %d) -> key: %x - value: %v} ", common.BytesToHash(hn).Hex(), n.getNonce(), n.Key, n.Val.infostring(ind+"  ", db))
 }
 func (n hashNode) infostring(ind string, db *Database) string {
 	// resolve hashNode (get node from db)
@@ -254,6 +271,7 @@ func (n hashNode) infostring(ind string, db *Database) string {
 		return fmt.Sprintf("<%x> ", []byte(n))
 	}
 }
+
 // same struct copied from state_object.go to decode data
 type Account struct {
 	Nonce    uint64
@@ -261,9 +279,26 @@ type Account struct {
 	Root     common.Hash // merkle root of the storage trie
 	CodeHash []byte
 }
+
 func (n valueNode) infostring(ind string, db *Database) string {
 	// decode data into account & print account
 	var acc Account
 	rlp.DecodeBytes([]byte(n), &acc)
 	return fmt.Sprintf("[ Nonce: %d / Balance: %d ]", acc.Nonce, acc.Balance.Uint64())
+}
+
+// rehash gets rehashed node hash value (should be called when its nonce value is changed) (jmlee)
+func rehash(n node) node {
+	if n == nil {
+		hash := hashNode(emptyRoot.Bytes())
+		fmt.Println("rehashed hash:", common.BytesToHash(hash).Hex()) 
+		return hash
+	}
+
+	h := newHasher(nil)
+	defer returnHasherToPool(h)
+	hash, _, _ := h.hash(n, nil, true)
+
+	fmt.Println("rehashed hash:", common.BytesToHash(hash.(hashNode)).Hex()) 
+	return hash
 }
