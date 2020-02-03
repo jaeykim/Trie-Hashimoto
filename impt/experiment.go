@@ -43,8 +43,8 @@ func main() {
 	for i := 1; i <= accountsNum; i++ {
 
 		// make random address
-		//randHex := randomHex(20)
-		//fmt.Println("random hex string:", randHex)
+		// randHex := randomHex(20)
+		// fmt.Println("random hex string:", randHex)
 
 		// make incremental hex
 		randHex := fmt.Sprintf("%x", i) // make int as hex string
@@ -89,5 +89,20 @@ func main() {
 	fmt.Println("\nprint secure trie")
 	secureTrie.Trie().Print()
 
+	fmt.Println("norm trie root: ", normTrie.Hash().Hex())
+	fmt.Println("secure trie root: ", secureTrie.Hash().Hex())
 
+	fmt.Println("\n\n\n")
+
+	// change nonce of norm trie root node
+	fmt.Println("set new nonce for norm trie")
+	normTrie.SetRootNonce(300)
+	normTrie.Print()
+	fmt.Println("new norm trie root: ", normTrie.Hash().Hex())
+
+	// change nonce of secure trie root node
+	fmt.Println("\n\n\nset new nonce for secure trie")
+	secureTrie.Trie().SetRootNonce(300)
+	secureTrie.Trie().Print()
+	fmt.Println("new secure trie root: ", secureTrie.Hash().Hex())
 }
