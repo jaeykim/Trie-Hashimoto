@@ -101,6 +101,8 @@ func (n rawNode) canUnload(uint16, uint16) bool { panic("this should never end u
 func (n rawNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
 func (n rawNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
 func (n rawNode) infostring(ind string, db *Database) string     { panic("this should never end up in a live trie") } // (jmlee)
+func (n rawNode) setNonce(newNonce uint64)	{ panic("this should never end up in a live trie") }
+func (n rawNode) getNonce() uint64	{ panic("this should never end up in a live trie") }
 
 // rawFullNode represents only the useful data content of a full node, with the
 // caches and flags stripped out to minimize its data storage. This type honors
@@ -111,6 +113,8 @@ func (n rawFullNode) canUnload(uint16, uint16) bool { panic("this should never e
 func (n rawFullNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
 func (n rawFullNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
 func (n rawFullNode) infostring(ind string, db *Database) string     { panic("this should never end up in a live trie") } // (jmlee)
+func (n rawFullNode) setNonce(newNonce uint64)	{ panic("this should never end up in a live trie") }
+func (n rawFullNode) getNonce() uint64	{ panic("this should never end up in a live trie") }
 
 func (n rawFullNode) EncodeRLP(w io.Writer) error {
 	var nodes [17]node
@@ -137,6 +141,8 @@ func (n rawShortNode) canUnload(uint16, uint16) bool { panic("this should never 
 func (n rawShortNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
 func (n rawShortNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
 func (n rawShortNode) infostring(ind string, db *Database) string     { panic("this should never end up in a live trie") } // (jmlee)
+func (n rawShortNode) setNonce(newNonce uint64)	{ panic("this should never end up in a live trie") }
+func (n rawShortNode) getNonce() uint64	{ panic("this should never end up in a live trie") }
 
 // cachedNode is all the information we know about a single cached node in the
 // memory database write layer.
