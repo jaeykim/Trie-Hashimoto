@@ -681,6 +681,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 	defer s.clearJournalAndRefund()
 
 	for addr := range s.journal.dirties {
+		// journal 에서 dirties를 가져와 stateObjectsDirty로 옮겨 저장 (jmlee)
 		s.stateObjectsDirty[addr] = struct{}{}
 	}
 	// Commit objects to the trie, measuring the elapsed time
