@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"time"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -29,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/olekukonko/tablewriter"
+	"github.com/ethereum/go-ethereum/trie"
+
 )
 
 // GlobalDB is a variable to access leveldb at everywhere (jmlee)
@@ -220,6 +223,23 @@ func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, freezer 
 		return nil, err
 	}
 	GlobalDB = frdb // set globaldb (jmlee)
+	fmt.Println("GlobalDB is set")
+
+	// open additional leveldb for indexed trie nodes (jmlee)
+	for i:=0; i<len(trie.GlobalTrieNodeDB); i++{
+		t_namespace := "eth/db/indexedNode/" + strconv.Itoa(i)
+		t_kvdb, err := leveldb.New(file + "/../indexedNodes/index" + strconv.Itoa(i), cache, handles, t_namespace)
+		if err != nil {
+			return nil, err
+		}
+		t_frdb, err := NewDatabaseWithFreezer(t_kvdb, freezer + "/../../indexedNodes/index" + strconv.Itoa(i) + "/ancient", t_namespace)
+		if err != nil {
+			t_kvdb.Close()
+			return nil, err
+		}
+		trie.GlobalTrieNodeDB[i] = t_frdb
+	}
+
 	return frdb, nil
 }
 
