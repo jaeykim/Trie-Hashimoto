@@ -24,6 +24,8 @@ import (
 	"reflect"
 	"sync"
 	"time"
+	"strconv"
+	"os"
 
 	"github.com/allegro/bigcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -32,6 +34,10 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+const GlobalTrieNodeDBLength = 5
+var GlobalTrieNodeDB [GlobalTrieNodeDBLength]ethdb.Database
+// GlobalLevelDB[0], _ = rawdb.NewLevelDBDatabase("globalDB0", int(0), int(0), "nodedata")
 
 var (
 	memcacheCleanHitMeter   = metrics.NewRegisteredMeter("trie/memcache/clean/hit", nil)
@@ -388,6 +394,19 @@ func (db *Database) insertPreimage(hash common.Hash, preimage []byte) {
 	db.preimagesSize += common.StorageSize(common.HashLength + len(preimage))
 }
 
+// GetProperDBIndex gets proper index of GlobalTrieNodeDB for indexed trie node (jmlee)
+// this can be changed with other db indexing policies
+func GetProperDBIndex(hash common.Hash) int {
+	index := string(hash.Hex()[2]) // ex. 0xea945... -> index = e
+	var dbIndex int
+	if index < strconv.Itoa(GlobalTrieNodeDBLength) {
+		dbIndex, _ = strconv.Atoi(index)
+	} else {
+		dbIndex = GlobalTrieNodeDBLength-1
+	}
+	return dbIndex
+}
+
 // node retrieves a cached trie node from memory, or returns nil if none can be
 // found in the memory cache.
 func (db *Database) node(hash common.Hash) node {
@@ -408,7 +427,34 @@ func (db *Database) node(hash common.Hash) node {
 		return dirty.obj(hash)
 	}
 	// Content unavailable in memory, attempt to retrieve from disk
-	enc, err := db.diskdb.Get(hash[:])
+	// enc, err := db.diskdb.Get(hash[:]) // impt: find indexed trie node in proper trie node db (jmlee)
+	dbIndex := GetProperDBIndex(hash)
+	start1 := time.Now()
+	enc, err := GlobalTrieNodeDB[dbIndex].Get(hash[:])
+	elapsed1 := time.Since(start1)
+	start2 := time.Now()
+	enc, err = db.diskdb.Get(hash[:])
+	elapsed2 := time.Since(start2)
+	// fmt.Println("	%% compare DB search time -> triedb:", elapsed1, "vs totaldb:", elapsed2, "-> reduced time:", elapsed2-elapsed1)
+	// print trie db index & search time for impt data log
+	logData := ""
+	logData += strconv.Itoa(dbIndex) + ","
+	logData += strconv.Itoa(int(elapsed1.Nanoseconds())) + ","
+	logData += strconv.Itoa(int(elapsed2.Nanoseconds())) + ","
+	logData += strconv.Itoa(int((elapsed2-elapsed1).Nanoseconds())) + ","
+	// fmt.Println("	logData:", logData)
+	// fmt.Println(logData)
+
+	// append or write logData to file
+	f, err := os.OpenFile("./experiment/impt_data_log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Info("ERR", "err", err)
+	}
+	fmt.Fprintln(f, logData)
+	f.Close()
+
+
+
 	if err != nil || enc == nil {
 		return nil
 	}
@@ -444,7 +490,33 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 		return dirty.rlp(), nil
 	}
 	// Content unavailable in memory, attempt to retrieve from disk
-	enc, err := db.diskdb.Get(hash[:])
+	// enc, err := db.diskdb.Get(hash[:]) // impt: find indexed trie node in proper trie node db (jmlee) (cf. this Node() function is rarely called)
+	dbIndex := GetProperDBIndex(hash)
+	start1 := time.Now()
+	enc, err := GlobalTrieNodeDB[dbIndex].Get(hash[:])
+	elapsed1 := time.Since(start1)
+	start2 := time.Now()
+	enc, err = db.diskdb.Get(hash[:])
+	elapsed2 := time.Since(start2)
+	// fmt.Println("	%%% compare DB search time -> triedb:", elapsed1, "vs totaldb:", elapsed2, "-> reduced time:", elapsed2-elapsed1)
+
+	// print trie db index & search time for impt data log
+	logData := ""
+	logData += strconv.Itoa(dbIndex) + ","
+	logData += strconv.Itoa(int(elapsed1.Nanoseconds())) + ","
+	logData += strconv.Itoa(int(elapsed2.Nanoseconds())) + ","
+	logData += strconv.Itoa(int((elapsed2-elapsed1).Nanoseconds())) + ","
+	// fmt.Println("	logData:", logData)
+	// fmt.Println(logData)
+
+	// append or write logData to file
+	f, err := os.OpenFile("./experiment/impt_data_log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Info("ERR", "err", err)
+	}
+	fmt.Fprintln(f, logData)
+	f.Close()
+
 	if err == nil && enc != nil {
 		if db.cleans != nil {
 			db.cleans.Set(string(hash[:]), enc)
@@ -467,7 +539,7 @@ func (db *Database) preimage(hash common.Hash) ([]byte, error) {
 		return preimage, nil
 	}
 	// Content unavailable in memory, attempt to retrieve from disk
-	return db.diskdb.Get(db.secureKey(hash[:]))
+	return db.diskdb.Get(db.secureKey(hash[:])) // impt: preimage is not saved in trie node db. just leave it (jmlee)
 }
 
 // secureKey returns the database key for the preimage of key, as an ephemeral
@@ -604,6 +676,8 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 //
 // Note, this method is a non-synchronized mutator. It is unsafe to call this
 // concurrently with other mutators.
+// TODO: because this function also flushes trie nodes, I have to fix this for impt. 
+// but this function is not called in archive mode. so just ignore this temporarily (jmlee)
 func (db *Database) Cap(limit common.StorageSize) error {
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
@@ -713,7 +787,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	// by only uncaching existing data when the database write finalizes.
 	start := time.Now()
 	batch := db.diskdb.NewBatch()
-
+	
 	// Move all of the accumulated preimages into a write batch
 	for hash, preimage := range db.preimages {
 		if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
@@ -734,7 +808,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 		return err
 	}
 	batch.Reset()
-
+	
 	// Move the trie itself into the batch, flushing if enough data is accumulated
 	nodes, storage := len(db.dirties), db.dirtiesSize
 
@@ -789,6 +863,46 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 			return err
 		}
 	}
+
+	// impt: write indexed trie node to other leveldb (jmlee)
+	// fmt.Println("in commit(), hash ", hash.Hex(), "is Put to batch")
+	
+	if GlobalTrieNodeDB[0] != nil{
+
+		// open the batch of proper db for the indexed trie node
+		dbIndex := GetProperDBIndex(hash)
+		imptBatch := GlobalTrieNodeDB[dbIndex].NewBatch()
+		
+		// fmt.Println("imptBatch Put", hash.Hex())
+		if err := imptBatch.Put(hash[:], node.rlp()); err != nil {
+			fmt.Println("imptBatch Put err")
+			return err
+		}
+		// If we've reached an optimal batch size, commit and start over
+		if imptBatch.ValueSize() >= ethdb.IdealBatchSize {
+			if err := imptBatch.Write(); err != nil {
+				return err
+			}
+			// maybe i dont need this (jmlee)
+			// GlobalTrieNodeDB[dbIndex].lock.Lock()
+			// imptBatch.Replay(uncacher)
+			// imptBatch.Reset()
+			// GlobalTrieNodeDB[dbIndex].lock.Unlock()
+		}
+
+		// Trie mostly committed to disk, flush any batch leftovers
+		if err := imptBatch.Write(); err != nil {
+			log.Error("Failed to write trie to disk", "err", err)
+			return err
+		}
+
+	} else {
+		fmt.Println("trie node level db not opened yet, just return")
+	}
+
+	// impt: do not commit indexed trie nodes to total leveldb (jmlee)
+	// just comment out the code below
+	// but if you want to compare db search time, then do not comment out
 	if err := batch.Put(hash[:], node.rlp()); err != nil {
 		return err
 	}
@@ -802,6 +916,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 		batch.Reset()
 		db.lock.Unlock()
 	}
+
 	return nil
 }
 
