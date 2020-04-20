@@ -214,6 +214,10 @@ func initGenesis(ctx *cli.Context) error {
 
 	for _, name := range []string{"chaindata", "lightchaindata"} {
 		chaindb, err := stack.OpenDatabase(name, 0, 0, "")
+		// impt: open (memory / level) db for trie node when init geth (jmlee)
+		for i:=0;i<trie.GlobalTrieNodeDBLength;i++{
+			trie.GlobalTrieNodeDB[i], _ = stack.OpenDatabase("indexedNodes/index"+strconv.Itoa(i), 0, 0, "")
+		}
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
