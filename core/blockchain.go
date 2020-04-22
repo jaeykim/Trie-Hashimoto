@@ -668,7 +668,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 	// fmt.Println(logData)
 
 	// append or write logData to file
-	f, err := os.OpenFile("./experiment/impt_data_log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(trie.ImptLogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Info("ERR", "err", err)
 	}

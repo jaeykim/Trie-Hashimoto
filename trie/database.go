@@ -35,9 +35,9 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const GlobalTrieNodeDBLength = 5
+const GlobalTrieNodeDBLength = 6
 var GlobalTrieNodeDB [GlobalTrieNodeDBLength]ethdb.Database
-// GlobalLevelDB[0], _ = rawdb.NewLevelDBDatabase("globalDB0", int(0), int(0), "nodedata")
+var ImptLogFilePath = "./experiment/impt_data_log.txt"
 
 var (
 	memcacheCleanHitMeter   = metrics.NewRegisteredMeter("trie/memcache/clean/hit", nil)
@@ -398,13 +398,34 @@ func (db *Database) insertPreimage(hash common.Hash, preimage []byte) {
 // this can be changed with other db indexing policies
 func GetProperDBIndex(hash common.Hash) int {
 	index := string(hash.Hex()[2]) // ex. 0xea945... -> index = e
-	var dbIndex int
-	if index < strconv.Itoa(GlobalTrieNodeDBLength) {
-		dbIndex, _ = strconv.Atoi(index)
-	} else {
-		dbIndex = GlobalTrieNodeDBLength-1
+	var dbIndex int64
+	
+	// indexing policy 1: 5 DBs - 0 / 1 / 2 / 3 / 4~f
+	// if index < strconv.Itoa(GlobalTrieNodeDBLength) {
+	// 	dbIndex, _ = strconv.Atoi(index)
+	// } else {
+	// 	dbIndex = GlobalTrieNodeDBLength-1
+	// }
+	
+	// indexing policy 2: 6 DBs - 0 / 1 / 2~3 / 4~6 / 7~a / b~f
+	if index == "0" {	// 0
+		dbIndex = 0
+	} else if index < "2" {	// 1
+		dbIndex = 1
+	} else if index < "4" {	// 2~3
+		dbIndex = 2
+	} else if index < "7" {	// 4~6
+		dbIndex = 3
+	} else if index < "b" {	// 7~a
+		dbIndex = 4
+	} else {	// b~f
+		dbIndex = 5
 	}
-	return dbIndex
+
+	// indexing policy 3: 16 DBs - 0/1/2/3/4/5/6/7/8/9/a/b/c/d/e/f
+	// dbIndex, _ = strconv.ParseInt(index, 16, 8)
+
+	return int(dbIndex)
 }
 
 // node retrieves a cached trie node from memory, or returns nil if none can be
@@ -446,7 +467,7 @@ func (db *Database) node(hash common.Hash) node {
 	// fmt.Println(logData)
 
 	// append or write logData to file
-	f, err := os.OpenFile("./experiment/impt_data_log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(ImptLogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Info("ERR", "err", err)
 	}
@@ -510,7 +531,7 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	// fmt.Println(logData)
 
 	// append or write logData to file
-	f, err := os.OpenFile("./experiment/impt_data_log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(ImptLogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Info("ERR", "err", err)
 	}
@@ -872,6 +893,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 		// open the batch of proper db for the indexed trie node
 		dbIndex := GetProperDBIndex(hash)
 		imptBatch := GlobalTrieNodeDB[dbIndex].NewBatch()
+		// fmt.Println("in commit(), node", hash.Hex(), "is in db", dbIndex)
 		
 		// fmt.Println("imptBatch Put", hash.Hex())
 		if err := imptBatch.Put(hash[:], node.rlp()); err != nil {
