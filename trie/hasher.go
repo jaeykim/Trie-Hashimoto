@@ -228,7 +228,51 @@ func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 	// }
 	// fmt.Println("h.tmp:", h.tmp)
 	if hash == nil {
-		hash = h.makeHashNode(h.tmp)
+		switch n := n.(type) {
+		case *shortNode:
+			// do not comment out when i want to mining
+			/*
+			for ; ; nonce++ {
+				h.tmp.Reset()
+				n.Nonce = nonce
+				if err := rlp.Encode(&h.tmp, n); err != nil {
+					panic("encode error: " + err.Error())
+				}
+				hash = h.makeHashNode(h.tmp)
+				if nonceMatched(n, hash) {
+					nonce = n.getNonce()
+					break
+				}
+			}
+			*/
+
+			hash = h.makeHashNode(h.tmp)
+			// hash = modifyHash(n, hash)	// comment out when i dont want to indexing trie nodes
+		case *fullNode:
+			// do not comment out when i want to mining
+			/*
+			for ; ; nonce++ {
+				h.tmp.Reset()
+				n.Nonce = nonce
+				if err := rlp.Encode(&h.tmp, n); err != nil {
+					panic("encode error: " + err.Error())
+				}
+				hash = h.makeHashNode(h.tmp)
+				if nonceMatched(n, hash) {
+					nonce = n.getNonce()
+					break
+				}
+			}
+			*/
+			hash = h.makeHashNode(h.tmp)
+			// hash = modifyHash(n, hash)	// comment out when i dont want to indexing trie nodes
+		case hashNode, valueNode:
+			hash = h.makeHashNode(h.tmp)
+			// hash = modifyHash(n, hash)	// comment out when i dont want to indexing trie nodes
+		default:
+			_ = n
+		   panic("makeHashNode error")
+		}
 	}
 
 	if db != nil {
@@ -265,3 +309,38 @@ func (h *hasher) makeHashNode(data []byte) hashNode {
 	h.sha.Read(n)
 	return n
 }
+
+func modifyHash(n node, hash hashNode) hashNode {
+   
+	newHash := hashNode(hash)
+	copy(newHash, hash)
+	switch n := n.(type) {
+	case *shortNode:
+	   
+	   keyHashPrefix := compactToHashPrefix(n.Key)
+	   copy(newHash[:len(keyHashPrefix)], keyHashPrefix)
+	   return newHash
+	   
+	case *fullNode:
+	   numOfChildren := 0
+	   var tmp [4]int
+	   idx := 0
+	   for i := 0; i < len(n.Children); i++ {
+		  if n.Children[i] != nil {
+			 if numOfChildren < 4 {
+				tmp[idx] = i
+				idx++
+			 }
+			 numOfChildren++
+		  }
+	   }
+	   newHash[0] = byte(numOfChildren%16)
+	   newHash[1] = byte(tmp[0]) << 4
+	   newHash[1] |= byte(tmp[1])
+	   newHash[2] = byte(tmp[2]) << 4
+	   newHash[2] |= byte(tmp[3])
+	   return newHash 
+	default:
+	   return nil
+	}
+ }
