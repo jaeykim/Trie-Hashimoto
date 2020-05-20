@@ -7,8 +7,11 @@
 package leveldb
 
 import (
+	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
+	"os"
 
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -324,10 +327,12 @@ func (db *DB) memCompaction() {
 
 	db.logf("memdb@flush committed F·%d T·%v", len(rec.addedTables), stats.duration)
 
+	// Save compaction stats
 	for _, r := range rec.addedTables {
 		stats.write += r.size
 	}
 	db.compStats.addStat(flushLevel, stats)
+	atomic.AddUint32(&db.memComp, 1)
 
 	// Drop frozen memdb.
 	db.dropFrozenMem()
@@ -537,6 +542,17 @@ func (b *tableCompactionBuilder) revert() error {
 	return nil
 }
 
+// write compaction log to the file (jmlee)
+func writeCompactionLog(log string) {
+	f, err := os.OpenFile("/home/jmlee/go/src/github.com/ethereum/go-ethereum/build/bin/experiment/impt_leveldb_compaction_log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Println("ERR:", err)
+		// log.Info("ERR", "err", err)
+	}
+	fmt.Fprintln(f, log)
+	f.Close()
+}
+
 func (db *DB) tableCompaction(c *compaction, noTrivial bool) {
 	defer c.release()
 
@@ -544,6 +560,8 @@ func (db *DB) tableCompaction(c *compaction, noTrivial bool) {
 	rec.addCompPtr(c.sourceLevel, c.imax)
 
 	if !noTrivial && c.trivial() {
+		// fmt.Println("[move compaction]")
+		// writeCompactionLog("compaction,move")	// write compaction log (jmlee)
 		t := c.levels[0][0]
 		db.logf("table@move L%d@%d -> L%d", c.sourceLevel, t.fd.Num, c.sourceLevel+1)
 		rec.delTable(c.sourceLevel, t.fd.Num)
@@ -587,6 +605,20 @@ func (db *DB) tableCompaction(c *compaction, noTrivial bool) {
 	// Save compaction stats
 	for i := range stats {
 		db.compStats.addStat(c.sourceLevel+1, &stats[i])
+	}
+	switch c.typ {
+	case level0Compaction:
+		// fmt.Println("[level0 compaction]")
+		// writeCompactionLog("compaction,level0")	// write compaction log (jmlee)
+		atomic.AddUint32(&db.level0Comp, 1)
+	case nonLevel0Compaction:
+		// fmt.Println("[non-level0 compaction]")
+		// writeCompactionLog("compaction,non-level0")	// write compaction log (jmlee)
+		atomic.AddUint32(&db.nonLevel0Comp, 1)
+	case seekCompaction:
+		// fmt.Println("[seek compaction]")
+		// writeCompactionLog("compaction,seek")	// write compaction log (jmlee)
+		atomic.AddUint32(&db.seekComp, 1)
 	}
 }
 

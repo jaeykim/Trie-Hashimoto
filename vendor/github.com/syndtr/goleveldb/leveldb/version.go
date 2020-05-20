@@ -8,9 +8,11 @@ package leveldb
 
 import (
 	"fmt"
+	// "strconv"
 	"sync/atomic"
 	"time"
 	"unsafe"
+	"os"
 
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -87,12 +89,25 @@ func (v *version) release() {
 	v.s.vmu.Unlock()
 }
 
+// write leveldb table log to the file (jmlee)
+func writeTableLog(log string) {
+	f, err := os.OpenFile("/home/jmlee/go/src/github.com/ethereum/go-ethereum/build/bin/experiment/impt_leveldb_table_log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Println("ERR:", err)
+		// log.Info("ERR", "err", err)
+	}
+	fmt.Fprintln(f, log)
+	f.Close()
+}
+
 func (v *version) walkOverlapping(aux tFiles, ikey internalKey, f func(level int, t *tFile) bool, lf func(level int) bool) {
 	ukey := ikey.ukey()
 
 	// Aux level.
 	if aux != nil {
-		for _, t := range aux {
+		for i, t := range aux {
+			// fmt.Println("Aux: " + strconv.Itoa(i))
+			_ = i
 			if t.overlaps(v.s.icmp, ukey, ukey) {
 				if !f(-1, t) {
 					return
@@ -106,10 +121,22 @@ func (v *version) walkOverlapping(aux tFiles, ikey internalKey, f func(level int
 	}
 
 	// Walk tables level-by-level.
+	// fmt.Println(v.levels)
 	for level, tables := range v.levels {
+		// fmt.Println("------------------------------------------------------")
+		// fmt.Println("[level: " + strconv.Itoa(level) + ", tablelen: " + strconv.Itoa(len(tables)) + "]")
+		// writeTableLog("level: " + strconv.Itoa(level) + ", tablelen: " + strconv.Itoa(len(tables)))	// write leveldb table log (jmlee)
+
 		if len(tables) == 0 {
 			continue
 		}
+
+		// for i, t := range tables {
+		// 	fmt.Println("table " + strconv.Itoa(i))
+		// 	fmt.Println("fd: " + t.fd.String())
+		// 	fmt.Println("size: " + strconv.FormatInt(t.size, 10))
+		// 	fmt.Println("range: (" + string(t.imin) + ", " + string(t.imax) + ")")
+		// }
 
 		if level == 0 {
 			// Level-0 files may overlap each other. Find all files that
@@ -144,6 +171,7 @@ func (v *version) get(aux tFiles, ikey internalKey, ro *opt.ReadOptions, noValue
 	}
 
 	ukey := ikey.ukey()
+	sampleSeeks := !v.s.o.GetDisableSeeksCompaction()
 
 	var (
 		tset  *tSet
@@ -161,7 +189,7 @@ func (v *version) get(aux tFiles, ikey internalKey, ro *opt.ReadOptions, noValue
 	// Since entries never hop across level, finding key/value
 	// in smaller level make later levels irrelevant.
 	v.walkOverlapping(aux, ikey, func(level int, t *tFile) bool {
-		if level >= 0 && !tseek {
+		if sampleSeeks && level >= 0 && !tseek {
 			if tset == nil {
 				tset = &tSet{level, t}
 			} else {
@@ -511,11 +539,11 @@ func (p *versionStaging) finish(trivial bool) *version {
 					added = append(added, tableFileFromRecord(r))
 				}
 				if level == 0 {
-					added.sortByNum()
+					added.sortByNum() // Sorts tables by file number in descending order.
 					index := nt.searchNumLess(added[len(added)-1].fd.Num)
 					nt = append(nt[:index], append(added, nt[index:]...)...)
 				} else {
-					added.sortByKey(p.base.s.icmp)
+					added.sortByKey(p.base.s.icmp) // Sorts tables by key in ascending order.
 					_, amax := added.getRange(p.base.s.icmp)
 					index := nt.searchMin(p.base.s.icmp, amax)
 					nt = append(nt[:index], append(added, nt[index:]...)...)
