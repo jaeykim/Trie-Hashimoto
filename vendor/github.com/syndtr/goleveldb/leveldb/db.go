@@ -1016,9 +1016,6 @@ func (db *DB) GetProperty(name string) (value string, err error) {
 	case p == "aliveiters":
 		value = fmt.Sprintf("%d", atomic.LoadInt32(&db.aliveIters))
 	case p == "impt":	// stats for impt (jmlee)
-		// value = "Compactions\n" +
-		// " Level |   Tables   |    Size(MB)   |    Time(sec)  |    Read(MB)   |   Write(MB)\n" +
-		// "-------+------------+---------------+---------------+---------------+---------------\n"
 		var totalTables int
 		var totalSize, totalRead, totalWrite int64
 		var totalDuration time.Duration
@@ -1033,18 +1030,11 @@ func (db *DB) GetProperty(name string) (value string, err error) {
 			totalRead += read
 			totalWrite += write
 			totalDuration += duration
-			// value += fmt.Sprintf(" %3d   | %10d | %13.5f | %13.5f | %13.5f | %13.5f\n",
-			// 	level, len(tables), float64(tables.size())/1048576.0, duration.Seconds(),
-			// 	float64(read)/1048576.0, float64(write)/1048576.0)
 			value += fmt.Sprintf("%1d,%1d,%1.5f,%1.5f,%1.5f,%1.5f,\n",
 				level, len(tables), float64(tables.size())/1048576.0, duration.Seconds(),
 				float64(read)/1048576.0, float64(write)/1048576.0)
 		}
-		// value += "-------+------------+---------------+---------------+---------------+---------------\n"
-		// value += fmt.Sprintf(" Total | %10d | %13.5f | %13.5f | %13.5f | %13.5f\n",
-		// 	totalTables, float64(totalSize)/1048576.0, totalDuration.Seconds(),
-		// 	float64(totalRead)/1048576.0, float64(totalWrite)/1048576.0)
-		// value += fmt.Sprintf("MemComp:%d Level0Comp:%d NonLevel0Comp:%d SeekComp:%d", atomic.LoadUint32(&db.memComp), atomic.LoadUint32(&db.level0Comp), atomic.LoadUint32(&db.nonLevel0Comp), atomic.LoadUint32(&db.seekComp))
+		value += fmt.Sprintf("%d,%d,%d,%d,\n", atomic.LoadUint32(&db.memComp), atomic.LoadUint32(&db.level0Comp), atomic.LoadUint32(&db.nonLevel0Comp), atomic.LoadUint32(&db.seekComp))
 	default:
 		err = ErrNotFound
 	}
