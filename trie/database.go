@@ -107,25 +107,62 @@ func (n rawNode) getNonce() uint64	{ panic("this should never end up in a live t
 // rawFullNode represents only the useful data content of a full node, with the
 // caches and flags stripped out to minimize its data storage. This type honors
 // the same RLP encoding as the original parent.
-type rawFullNode [17]node
+type rawFullNode struct {
+	Children	[17]node
+	Nonce		uint64 // nonce field for impt (sjkim)
+}
+
+type rawOptFullNode struct { // Optimized full node (sjkim)
+	Children	[2]node
+	Nonce 		uint64
+}
 
 func (n rawFullNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
 func (n rawFullNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
 func (n rawFullNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
 func (n rawFullNode) infostring(ind string, db *Database) string     { panic("this should never end up in a live trie") } // (jmlee)
 func (n rawFullNode) setNonce(newNonce uint64)	{ panic("this should never end up in a live trie") }
-func (n rawFullNode) getNonce() uint64	{ panic("this should never end up in a live trie") }
+func (n rawFullNode) getNonce() uint64	{ 
+	//panic("this should never end up in a live trie")
+	return n.Nonce
+}
 
 func (n rawFullNode) EncodeRLP(w io.Writer) error {
-	var nodes [17]node
+	var nodes [18]node
 
-	for i, child := range n {
+	for i, child := range n.Children {
 		if child != nil {
 			nodes[i] = child
 		} else {
 			nodes[i] = nilValueNode
 		}
 	}
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, n.Nonce)
+	nodes[17] = valueNode(b)
+	return rlp.Encode(w, nodes)
+}
+
+func (n rawOptFullNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
+func (n rawOptFullNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
+func (n rawOptFullNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
+func (n rawOptFullNode) infostring(ind string, db *Database) string     { panic("this should never end up in a live trie") } // (jmlee)
+func (n rawOptFullNode) setNonce(newNonce uint64)	{ panic("this should never end up in a live trie") }
+func (n rawOptFullNode) getNonce() uint64	{ panic("this should never end up in a live trie") }
+
+func (n rawOptFullNode) EncodeRLP(w io.Writer) error {
+	var nodes [3]node
+
+	for i, child := range n.Children {
+		if child != nil {
+			nodes[i] = child
+		} else {
+			nodes[i] = nilValueNode
+		}
+	}
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, n.Nonce) // 
+	nodes[2] = valueNode(b)
 	return rlp.Encode(w, nodes)
 }
 
@@ -133,8 +170,9 @@ func (n rawFullNode) EncodeRLP(w io.Writer) error {
 // caches and flags stripped out to minimize its data storage. This type honors
 // the same RLP encoding as the original parent.
 type rawShortNode struct {
-	Key []byte
-	Val node
+	Key 	[]byte
+	Val 	node
+	Nonce	uint64 // nonce field for impt (sjkim)
 }
 
 func (n rawShortNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
@@ -143,6 +181,17 @@ func (n rawShortNode) fstring(ind string) string     { panic("this should never 
 func (n rawShortNode) infostring(ind string, db *Database) string     { panic("this should never end up in a live trie") } // (jmlee)
 func (n rawShortNode) setNonce(newNonce uint64)	{ panic("this should never end up in a live trie") }
 func (n rawShortNode) getNonce() uint64	{ panic("this should never end up in a live trie") }
+
+func (n rawShortNode) EncodeRLP(w io.Writer) error {
+	var nodes [3]node
+	
+	nodes[0] = valueNode(n.Key)
+	nodes[1] = n.Val
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, n.Nonce)
+	nodes[2] = valueNode(b)
+	return rlp.Encode(w, nodes)
+}
 
 // cachedNode is all the information we know about a single cached node in the
 // memory database write layer.
@@ -210,7 +259,11 @@ func gatherChildren(n node, children *[]common.Hash) {
 
 	case rawFullNode:
 		for i := 0; i < 16; i++ {
-			gatherChildren(n[i], children)
+			gatherChildren(n.Children[i], children) // (sjkim)
+		}
+	case rawOptFullNode:
+		for i := 0; i < 2; i++ {
+			gatherChildren(n.Children[i], children) // (sjkim)
 		}
 	case hashNode:
 		*children = append(*children, common.BytesToHash(n))
@@ -228,17 +281,36 @@ func simplifyNode(n node) node {
 	switch n := n.(type) {
 	case *shortNode:
 		// Short nodes discard the flags and cascade
-		return &rawShortNode{Key: n.Key, Val: simplifyNode(n.Val)}
+		return &rawShortNode{Key: n.Key, Val: simplifyNode(n.Val), Nonce: n.Nonce} // (sjkim)
 
 	case *fullNode:
-		// Full nodes discard the flags and cascade
-		node := rawFullNode(n.Children)
-		for i := 0; i < len(node); i++ {
-			if node[i] != nil {
-				node[i] = simplifyNode(node[i])
+		numOfChildren := 0
+		for i := 0; i < len(n.Children); i++ {
+			if n.Children[i] != nil {
+				numOfChildren++
 			}
 		}
-		return node
+
+		if numOfChildren > 0 {
+			// Full nodes discard the flags and cascade
+			node := rawFullNode{Children: n.Children, Nonce: n.Nonce} // (sjkim)
+			for i := 0; i < len(node.Children); i++ {
+				if node.Children[i] != nil {
+					node.Children[i] = simplifyNode(node.Children[i])
+				}
+			}
+			return node
+		} else {
+			node := rawOptFullNode{Nonce: n.Nonce}
+			idx := 0
+			for i := 0; i < len(n.Children); i++ {
+				if n.Children[i] != nil {
+					node.Children[idx] = simplifyNode(n.Children[i])
+					idx++
+				}
+			}
+			return node
+		} 
 
 	case valueNode, hashNode, rawNode:
 		return n
@@ -257,6 +329,7 @@ func expandNode(hash hashNode, n node) node {
 		return &shortNode{
 			Key: compactToHex(n.Key),
 			Val: expandNode(nil, n.Val),
+			Nonce: n.Nonce,
 			flags: nodeFlag{
 				hash: hash,
 			},
@@ -265,15 +338,29 @@ func expandNode(hash hashNode, n node) node {
 	case rawFullNode:
 		// Full nodes need child expansion
 		node := &fullNode{
+			Nonce: n.Nonce,
 			flags: nodeFlag{
 				hash: hash,
 			},
 		}
 		for i := 0; i < len(node.Children); i++ {
-			if n[i] != nil {
-				node.Children[i] = expandNode(nil, n[i])
+			if n.Children[i] != nil {
+				node.Children[i] = expandNode(nil, n.Children[i])
 			}
 		}
+		return node
+	
+	case rawOptFullNode:
+		node := &fullNode{
+			Nonce: n.Nonce,
+			flags: nodeFlag{
+				hash: hash,
+			},
+		}
+		
+		node.Children[hash[1]/16] = expandNode(nil, n.Children[0]) // fast mining
+		node.Children[hash[1]%16] = expandNode(nil, n.Children[1]) // fast mining
+
 		return node
 
 	case valueNode, hashNode:
