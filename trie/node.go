@@ -21,6 +21,7 @@ import (
 	"io"
 	"strings"
 	"math/big"
+	"encoding/binary" // (sjkim)
 	
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -39,14 +40,14 @@ type node interface {
 type (
 	fullNode struct { // branch node
 		Children [17]node // Actual trie node data to encode/decode (needs custom encoder)
-		flags    nodeFlag
 		Nonce    uint64 // to change node's hash for impt mining (jmlee)
+		flags    nodeFlag
 	}
 	shortNode struct { // extension node or leaf node
 		Key   []byte
 		Val   node
-		flags nodeFlag
 		Nonce uint64 // to change node's hash for impt mining (jmlee)
+		flags nodeFlag
 	}
 	hashNode  []byte
 	valueNode []byte
@@ -57,8 +58,9 @@ type (
 var nilValueNode = valueNode(nil)
 
 // EncodeRLP encodes a full node into the consensus RLP format.
+// This encoding reflects the nonce field
 func (n *fullNode) EncodeRLP(w io.Writer) error {
-	var nodes [17]node
+	var nodes [18]node
 
 	for i, child := range &n.Children {
 		if child != nil {
@@ -67,6 +69,22 @@ func (n *fullNode) EncodeRLP(w io.Writer) error {
 			nodes[i] = nilValueNode
 		}
 	}
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, n.getNonce())
+	nodes[17] = valueNode(b)
+	return rlp.Encode(w, nodes)
+}
+
+// EncodeRLP encodes a short node into the consensus RLP format.
+// This encoding reflects the nonce field 
+func (n *shortNode) EncodeRLP(w io.Writer) error {
+	var nodes [3]node
+
+	nodes[0] = valueNode(n.Key)
+	nodes[1] = n.Val
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, n.getNonce())
+	nodes[2] = valueNode(b)
 	return rlp.Encode(w, nodes)
 }
 
@@ -84,8 +102,8 @@ func (n *shortNode) cache() (hashNode, bool) { return n.flags.hash, n.flags.dirt
 func (n hashNode) cache() (hashNode, bool)   { return nil, true }
 func (n valueNode) cache() (hashNode, bool)  { return nil, true }
 
-func (n *fullNode) setNonce(newNonce uint64) { n.Nonce =  newNonce; n.flags.dirty = true; n.flags.hash = nil; n.flags.hash = rehash(n).(hashNode) } // should be set flags.hash to nil to be rehashed (jmlee)
-func (n *shortNode) setNonce(newNonce uint64) { n.Nonce =  newNonce; n.flags.dirty = true; n.flags.hash = nil; n.flags.hash = rehash(n).(hashNode) }// should be set flags.hash to nil to be rehashed (jmlee)
+func (n *fullNode) setNonce(newNonce uint64) { n.Nonce =  newNonce; return } // should be set flags.hash to nil to be rehashed (jmlee)
+func (n *shortNode) setNonce(newNonce uint64) { n.Nonce =  newNonce; return }// should be set flags.hash to nil to be rehashed (jmlee)
 func (n hashNode) setNonce(newNonce uint64)   { return }
 func (n valueNode) setNonce(newNonce uint64)  { return }
 
@@ -139,10 +157,10 @@ func decodeNode(hash, buf []byte) (node, error) {
 		return nil, fmt.Errorf("decode error: %v", err)
 	}
 	switch c, _ := rlp.CountValues(elems); c {
-	case 2:
+	case 3:
 		n, err := decodeShort(hash, elems)
 		return n, wrapError(err, "short")
-	case 17:
+	case 18:
 		n, err := decodeFull(hash, elems)
 		return n, wrapError(err, "full")
 	default:
@@ -159,17 +177,27 @@ func decodeShort(hash, elems []byte) (node, error) {
 	key := compactToHex(kbuf)
 	if hasTerm(key) {
 		// value node
-		val, _, err := rlp.SplitString(rest)
+		val, rest, err := rlp.SplitString(rest)
 		if err != nil {
 			return nil, fmt.Errorf("invalid value node: %v", err)
 		}
-		return &shortNode{key, append(valueNode{}, val...), flag, 0}, nil
+		nonceVal, _, err := rlp.SplitString(rest)
+		if err != nil {
+			return nil, fmt.Errorf("invalid value node: %v", err)
+		}
+		nonce := binary.LittleEndian.Uint64(nonceVal)
+		return &shortNode{key, append(valueNode{}, val...), nonce, flag}, nil
 	}
-	r, _, err := decodeRef(rest)
+	r, rest, err := decodeRef(rest)
 	if err != nil {
 		return nil, wrapError(err, "val")
 	}
-	return &shortNode{key, r, flag, 0}, nil
+	nonceVal, _, err := rlp.SplitString(rest)
+	if err != nil {
+		return nil, wrapError(err, "val")
+	}
+	nonce := binary.LittleEndian.Uint64(nonceVal)
+	return &shortNode{key, r, nonce, flag}, nil
 }
 
 func decodeFull(hash, elems []byte) (*fullNode, error) {
@@ -181,13 +209,19 @@ func decodeFull(hash, elems []byte) (*fullNode, error) {
 		}
 		n.Children[i], elems = cld, rest
 	}
-	val, _, err := rlp.SplitString(elems)
+	val, rest, err := rlp.SplitString(elems)
 	if err != nil {
 		return n, err
 	}
 	if len(val) > 0 {
 		n.Children[16] = append(valueNode{}, val...)
 	}
+	val, _, err = rlp.SplitString(rest)
+	if err != nil {
+		return n, err
+	}
+	n.Nonce = binary.LittleEndian.Uint64(val)
+
 	return n, nil
 }
 
@@ -287,18 +321,19 @@ func (n valueNode) infostring(ind string, db *Database) string {
 	return fmt.Sprintf("[ Nonce: %d / Balance: %d ]", acc.Nonce, acc.Balance.Uint64())
 }
 
+/*
 // rehash gets rehashed node hash value (should be called when its nonce value is changed) (jmlee)
 func rehash(n node) node {
 	if n == nil {
 		hash := hashNode(emptyRoot.Bytes())
-		fmt.Println("rehashed hash:", common.BytesToHash(hash).Hex()) 
+		//fmt.Println("rehashed hash:", common.BytesToHash(hash).Hex()) 
 		return hash
 	}
 
 	h := newHasher(nil)
 	defer returnHasherToPool(h)
 	hash, _, _ := h.hash(n, nil, true)
-
-	fmt.Println("rehashed hash:", common.BytesToHash(hash.(hashNode)).Hex()) 
+	//fmt.Println("rehashed hash:", common.BytesToHash(hash.(hashNode)).Hex()) 
 	return hash
 }
+*/
