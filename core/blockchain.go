@@ -286,6 +286,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 	// Take ownership of this particular state
 	go bc.update()
+
+	// set NextBlockNumber to prefixing impt trie nodes hash (jmlee)
+	common.NextBlockNumber = bc.CurrentBlock().Header().Number.Uint64() + 1
+
 	return bc, nil
 }
 
@@ -675,7 +679,32 @@ func (bc *BlockChain) insert(block *types.Block) {
 	fmt.Fprintln(f, logData)
 	f.Close()
 
+	// increase NextBlockNumber (to prefixing impt trie node hash) (jmlee)
+	common.NextBlockNumber++
 
+
+	
+	// inspect leveldb stats
+	f, err = os.OpenFile("/home/jmlee/go/src/github.com/ethereum/go-ethereum/build/bin/experiment/impt_leveldb_compaction_log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Info("ERR", "err", err)
+	}
+	logData = "leveldbInfo\n"	// lists with -> level,tables,size(MB),time(sec),read(MB),write(MB)
+	
+	// log for total db
+	totalDBStat, _ := bc.db.Stat("leveldb.impt")
+	logData += totalDBStat + "\n"
+	// fmt.Println(totalDBStat)
+
+	// log for trie node db
+	// trieDBStat, = := trie.GlobalTrieNodeDB[0].Stat("leveldb.impt")
+	// logData += trieDBStat + "\n"
+	// fmt.Println(trieDBStat)
+
+	logData += "inserted block " + bc.CurrentBlock().Header().Number.String() + " ------------------------------\n"
+	fmt.Fprintln(f, logData)
+	f.Close()
+	
 
 
 	// print state trie (jmlee)
@@ -706,9 +735,9 @@ func (bc *BlockChain) insert(block *types.Block) {
 	// it := bc.db.NewIterator()
 	// for it.Next(){
 	// 	fmt.Println("	node hash:", common.BytesToHash(it.Key()).Hex())
-		// fmt.Println("	key: ", it.Key())
-		// fmt.Println("	value: ", it.Value())
-		// fmt.Println()
+	// 	// fmt.Println("	key: ", it.Key())
+	// 	// fmt.Println("	value: ", it.Value())
+	// 	// fmt.Println()
 	// }
 
 
