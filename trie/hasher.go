@@ -17,13 +17,15 @@
 package trie
 
 import (
-	_ "fmt"
+	_"fmt"
 	"hash"
 	"sync"
 	"encoding/binary"
+	"bytes"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/impt"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -75,21 +77,22 @@ func returnHasherToPool(h *hasher) {
 
 // hash collapses a node down into a hash node, also returning a copy of the
 // original node initialized with the computed hash to replace the original one.
-func (h *hasher) hash(n node, db *Database, force bool) (node, node, error) {
-	// fmt.Println("hasher.hash() called")
-	// hn, b := n.cache()
-	// fmt.Println("	node info before start hasher.hash() -> ", "/ node info -> hash:", hn.fstring(""), ", dirty:", b, ", nonce:", n.getNonce())
+func (h *hasher) hash(n node, db *Database, force bool, trieNonces *[]*impt.TrieNonce, isMining bool, blockNum uint64) (node, node, error) {
 	// If we're not storing the node, just hashing, use available cached data
 	if hash, dirty := n.cache(); hash != nil {
-		if db == nil {
+		// Returns cached hash directly only when normal Hash() was called.
+		// If HashWithNonce() or HashByNonce() was called, we should update the cached hash,
+		// so ignore the short-circuit condition.
+		if db == nil && trieNonces == nil {
 			// fmt.Println("hasher.hash() finished 1", "/ hash:", hash.fstring(""), "/ dirty:", dirty)
 			return hash, n, nil
 		}
-		if !dirty {
+		if db != nil && !dirty {
 			switch n.(type) {
 			case *fullNode, *shortNode:
 				// hn, b := n.cache()
 				// fmt.Println("hasher.hash() finished 2", "/ node info -> hash:", hn.fstring(""), ", dirty:", b, ", nonce:", n.getNonce())
+				// If the node is already cached and is not dirty, replace it to hashNode // (sjkim)
 				return hash, hash, nil
 			default:
 				// fmt.Println("hasher.hash() finished 3")
@@ -98,12 +101,12 @@ func (h *hasher) hash(n node, db *Database, force bool) (node, node, error) {
 		}
 	}
 	// Trie not processed yet or needs storage, walk the children
-	collapsed, cached, err := h.hashChildren(n, db)
+	collapsed, cached, err := h.hashChildren(n, db, trieNonces, isMining, blockNum)
 	if err != nil {
 		// fmt.Println("hasher.hash() finished 4")
 		return hashNode{}, n, err
 	}
-	hashed, err := h.store(collapsed, db, force)
+	hashed, nonce, err := h.store(collapsed, db, force, trieNonces, isMining, blockNum)
 	if err != nil {
 		// fmt.Println("hasher.hash() finished 5")
 		return hashNode{}, n, err
@@ -115,11 +118,15 @@ func (h *hasher) hash(n node, db *Database, force bool) (node, node, error) {
 	switch cn := cached.(type) {
 	case *shortNode:
 		cn.flags.hash = cachedHash
+		cn.Nonce = nonce
+		// Dirty flag is cleaned after commit is done
 		if db != nil {
 			cn.flags.dirty = false
 		}
 	case *fullNode:
 		cn.flags.hash = cachedHash
+		cn.Nonce = nonce
+		// Dirty flag is cleaned after commit is done
 		if db != nil {
 			cn.flags.dirty = false
 		}
@@ -132,7 +139,7 @@ func (h *hasher) hash(n node, db *Database, force bool) (node, node, error) {
 // hashChildren replaces the children of a node with their hashes if the encoded
 // size of the child is larger than a hash, returning the collapsed node as well
 // as a replacement for the original node with the child hashes cached in.
-func (h *hasher) hashChildren(original node, db *Database) (node, node, error) {
+func (h *hasher) hashChildren(original node, db *Database, trieNonces *[]*impt.TrieNonce, isMining bool, blockNum uint64) (node, node, error) {
 	var err error
 
 	switch n := original.(type) {
@@ -143,7 +150,7 @@ func (h *hasher) hashChildren(original node, db *Database) (node, node, error) {
 		cached.Key = common.CopyBytes(n.Key)
 
 		if _, ok := n.Val.(valueNode); !ok {
-			collapsed.Val, cached.Val, err = h.hash(n.Val, db, false)
+			collapsed.Val, cached.Val, err = h.hash(n.Val, db, false, trieNonces, isMining, blockNum)
 			if err != nil {
 				return original, original, err
 			}
@@ -156,7 +163,7 @@ func (h *hasher) hashChildren(original node, db *Database) (node, node, error) {
 
 		for i := 0; i < 16; i++ {
 			if n.Children[i] != nil {
-				collapsed.Children[i], cached.Children[i], err = h.hash(n.Children[i], db, false)
+				collapsed.Children[i], cached.Children[i], err = h.hash(n.Children[i], db, false, trieNonces, isMining, blockNum)
 				if err != nil {
 					return original, original, err
 				}
@@ -174,10 +181,11 @@ func (h *hasher) hashChildren(original node, db *Database) (node, node, error) {
 // store hashes the node n and if we have a storage layer specified, it writes
 // the key/value pair to it and tracks any node->child references as well as any
 // node->external trie references.
-func (h *hasher) store(n node, db *Database, force bool) (node, error) {
+func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]*impt.TrieNonce, isMining bool, blockNum uint64) (node, uint64, error) {
 	// Don't store hashes or empty nodes.
 	if _, isHash := n.(hashNode); n == nil || isHash {
-		return n, nil
+		//fmt.Println("hasher.store End 1")
+		return n, 0, nil	
 	}
 	// Generate the RLP encoding of the node
 	h.tmp.Reset()
@@ -185,10 +193,12 @@ func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 		panic("encode error: " + err.Error())
 	}
 	if len(h.tmp) < 32 && !force {
-		return n, nil // Nodes smaller than 32 bytes are stored inside their parent
+		return n, 0, nil // Nodes smaller than 32 bytes are stored inside their parent
 	}
 	// Larger nodes are replaced by their hash and stored in the database.
 	hash, _ := n.cache()
+
+	/*
 	switch n.(type) {
 		case *fullNode:
 			// 강제로 nonce 값이 들어가도록 만들었음 
@@ -198,7 +208,7 @@ func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 			h.tmp = append(h.tmp, byteNonce...)
 			// fmt.Println("appended byte:", h.tmp)
 	}
-
+	*/
 	// if n.getNonce() != 0 {
 	// 	fmt.Println("INFOOO")
 	// 	byteNonce := make([]byte, binary.MaxVarintLen64)
@@ -227,8 +237,82 @@ func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 	// 	}
 	// }
 	// fmt.Println("h.tmp:", h.tmp)
-	if hash == nil {
-		hash = h.makeHashNode(h.tmp)
+
+	nonce := uint64(0)
+
+	switch n := n.(type) {
+	case *shortNode, *fullNode:
+		// For IMPT; HashWithNonce()
+		if db == nil {
+			if trieNonces == nil {
+				// Used for normal Hash()
+				if hash == nil { hash = h.makeHashNode(h.tmp); }
+			} else if isMining {
+				// Used for HashWithNonce()
+				// Make new hashNode even if hashNode info already exists in cache
+				/*
+				hash = h.makeHashNode(h.tmp)
+				oldHash := common.BytesToHash(hash)
+				hash = modifyHash(n, hash)
+				newHash := common.BytesToHash(hash)
+				*trieNonces = append(*trieNonces, impt.NewTrieNonce(oldHash, newHash, nonce))
+				fmt.Printf("hasher.store(), HashWithNonce, <%x>, <%x>, %d\n", oldHash, newHash, nonce)
+				*/
+				hash = h.makeHashNode(h.tmp)
+				oldHash := common.BytesToHash(hash)
+				var newHash common.Hash
+				for ; ; nonce++ {
+					h.tmp.Reset()
+					n.setNonce(nonce)
+					if err := rlp.Encode(&h.tmp, n); err != nil {
+						panic("encode error: " + err.Error())
+					}
+					hash = h.makeHashNode(h.tmp)
+					// If the hash has the valid hash prefix, store the result
+					if validHashNode(hash, blockNum) {
+						newHash = common.BytesToHash(hash)
+						nonce = n.getNonce()
+						*trieNonces = append(*trieNonces, impt.NewTrieNonce(oldHash, newHash, nonce))
+						break
+					}
+				}
+			} else if !isMining {
+				// Used for HashByNonce()
+				// Make new hashNode even if hashNode info already exists in cache
+				hash = h.makeHashNode(h.tmp)
+				okay := false
+				_hash := common.BytesToHash(hash)
+				for _, trieNonce := range *trieNonces {
+					// Update normal MPT node to indexed MPT node
+					// Set nonce and generate new hashNode
+					if _hash == trieNonce.Before() {
+						h.tmp.Reset()
+						nonce = trieNonce.Nonce()
+						n.setNonce(nonce)
+						if err := rlp.Encode(&h.tmp, n); err != nil {
+							panic("encode error: " + err.Error())
+						}
+						hash = h.makeHashNode(h.tmp)
+						// Panic if it generates different hashNode or the hash is not valid
+						if common.BytesToHash(hash) != trieNonce.After() || !validHashNode(hash, blockNum) {
+							panic("HashByNonce error")
+						}
+						okay = true
+						break
+					}
+				}
+				// Panic if there are no any matched info for current node
+				if !okay {
+					panic("HashByNonce error")
+				}
+			}
+		} 
+	case valueNode:
+		if hash == nil {
+			hash = h.makeHashNode(h.tmp)
+		}
+	default:
+		panic("makeHashNode error")
 	}
 
 	if db != nil {
@@ -255,7 +339,7 @@ func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 			}
 		}
 	}
-	return hash, nil
+	return hash, nonce, nil
 }
 
 func (h *hasher) makeHashNode(data []byte) hashNode {
@@ -264,4 +348,67 @@ func (h *hasher) makeHashNode(data []byte) hashNode {
 	h.sha.Write(data)
 	h.sha.Read(n)
 	return n
+}
+
+// validHashNode returns whether the node hash has a valid prefix or not.
+// It returns true if the hash prefix is equal to the block number.
+func validHashNode(hash []byte, blockNum uint64) bool {
+	bs := make([]byte, 8)
+    binary.BigEndian.PutUint64(bs, blockNum)
+	return bytes.Equal(hash[:2], bs[6:])
+}
+
+// modifyHash returns a new hashNode without finding proper nonce
+// Just overlap the hash prefix with what we want
+func modifyHash(n node, hash hashNode) hashNode {
+	
+	newHash := hashNode(hash)
+	copy(newHash, hash)
+	switch n := n.(type) {
+	case *shortNode:
+		
+		keyHashPrefix := compactToHashPrefix(n.Key)
+		copy(newHash[:len(keyHashPrefix)], keyHashPrefix)
+		return newHash
+		
+	case *fullNode:
+		numOfChildren := 0
+		var tmp [4]int
+		idx := 0
+		for i := 0; i < len(n.Children); i++ {
+			if n.Children[i] != nil {
+				if numOfChildren < 4 {
+					tmp[idx] = i
+					idx++
+				}
+				numOfChildren++
+			}
+		}
+		newHash[0] = byte(numOfChildren%16)
+		newHash[1] = byte(tmp[0]) << 4
+		newHash[1] |= byte(tmp[1])
+		newHash[2] = byte(tmp[2]) << 4
+		newHash[2] |= byte(tmp[3])
+		return newHash 
+	default:
+		return nil
+	}
+}
+
+func _modifyHash(n node, hash hashNode) hashNode {
+	
+	var blockNum = uint64(100)
+
+	bs := make([]byte, 8)
+    binary.BigEndian.PutUint64(bs, blockNum)
+
+	newHash := hashNode(hash)
+	copy(newHash, hash)
+	switch n.(type) {
+	case *shortNode, *fullNode:
+		copy(newHash[:5], bs[3:])
+		return newHash
+	default:
+		return nil
+	}
 }
