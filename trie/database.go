@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const GlobalTrieNodeDBLength = 6
+const GlobalTrieNodeDBLength = 1
 var GlobalTrieNodeDB [GlobalTrieNodeDBLength]ethdb.Database
 var ImptLogFilePath = "./experiment/impt_data_log.txt"
 
@@ -408,22 +408,26 @@ func GetProperDBIndex(hash common.Hash) int {
 	// }
 	
 	// indexing policy 2: 6 DBs - 0 / 1 / 2~3 / 4~6 / 7~a / b~f
-	if index == "0" {	// 0
-		dbIndex = 0
-	} else if index < "2" {	// 1
-		dbIndex = 1
-	} else if index < "4" {	// 2~3
-		dbIndex = 2
-	} else if index < "7" {	// 4~6
-		dbIndex = 3
-	} else if index < "b" {	// 7~a
-		dbIndex = 4
-	} else {	// b~f
-		dbIndex = 5
-	}
+	// if index == "0" {	// 0
+	// 	dbIndex = 0
+	// } else if index < "2" {	// 1
+	// 	dbIndex = 1
+	// } else if index < "4" {	// 2~3
+	// 	dbIndex = 2
+	// } else if index < "7" {	// 4~6
+	// 	dbIndex = 3
+	// } else if index < "b" {	// 7~a
+	// 	dbIndex = 4
+	// } else {	// b~f
+	// 	dbIndex = 5
+	// }
 
 	// indexing policy 3: 16 DBs - 0/1/2/3/4/5/6/7/8/9/a/b/c/d/e/f
 	// dbIndex, _ = strconv.ParseInt(index, 16, 8)
+
+	// indexing policy 4: 1 DB
+	_ = index
+	dbIndex = 0
 
 	return int(dbIndex)
 }
