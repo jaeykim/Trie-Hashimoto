@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/impt"
 )
 
 // Client defines typed wrappers for the Ethereum RPC API.
@@ -92,6 +93,7 @@ type rpcBlock struct {
 	Hash         common.Hash      `json:"hash"`
 	Transactions []rpcTransaction `json:"transactions"`
 	UncleHashes  []common.Hash    `json:"uncles"`
+	TrieNonces	 []*impt.TrieNonce `json:"trieNonces"`
 }
 
 func (ec *Client) getBlock(ctx context.Context, method string, args ...interface{}) (*types.Block, error) {
@@ -156,7 +158,13 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 		}
 		txs[i] = tx.tx
 	}
-	return types.NewBlockWithHeader(head).WithBody(txs, uncles), nil
+	
+	trieNonces := make([]*impt.TrieNonce, len(body.TrieNonces))
+	for i, trieNonce := range body.TrieNonces {
+		trieNonces[i] = trieNonce
+	}
+
+	return types.NewBlockWithHeader(head).WithBody(txs, uncles, trieNonces), nil
 }
 
 // HeaderByHash returns the block header with the given hash.

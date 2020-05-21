@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/impt"
 )
 
 // SecureTrie wraps a trie with key hashing. In a secure trie, all
@@ -159,6 +160,15 @@ func (t *SecureTrie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 // database and can be used even if the trie doesn't have one.
 func (t *SecureTrie) Hash() common.Hash {
 	return t.trie.Hash()
+}
+
+
+func (t *SecureTrie) HashWithNonce(blockNum uint64) (common.Hash, []*impt.TrieNonce) {
+	return t.trie.HashWithNonce(blockNum)
+}
+
+func (t *SecureTrie) HashByNonce(trieNonces []*impt.TrieNonce, blockNum uint64) common.Hash {
+	return t.trie.HashByNonce(trieNonces, blockNum)
 }
 
 // Copy returns a copy of SecureTrie.

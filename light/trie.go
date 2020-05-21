@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/impt"
 )
 
 func NewState(ctx context.Context, head *types.Header, odr OdrBackend) *state.StateDB {
@@ -131,6 +132,21 @@ func (t *odrTrie) Hash() common.Hash {
 		return t.id.Root
 	}
 	return t.trie.Hash()
+}
+
+
+func (t *odrTrie) HashWithNonce(blockNum uint64) (common.Hash, []*impt.TrieNonce) {
+	if t.trie == nil {
+		return t.id.Root, nil
+	}
+	return t.trie.HashWithNonce(blockNum)
+}
+
+func (t *odrTrie) HashByNonce(trieNonces []*impt.TrieNonce, blockNum uint64) common.Hash {
+	if t.trie == nil {
+		return t.id.Root
+	}
+	return t.trie.HashByNonce(trieNonces, blockNum)
 }
 
 func (t *odrTrie) NodeIterator(startkey []byte) trie.NodeIterator {

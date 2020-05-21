@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/impt"
 )
 
 // Constants to match up protocol versions and messages
@@ -190,6 +191,7 @@ func (request *newBlockData) sanityCheck() error {
 type blockBody struct {
 	Transactions []*types.Transaction // Transactions contained within a block
 	Uncles       []*types.Header      // Uncles contained within a block
+	TrieNonces	 []*impt.TrieNonce
 }
 
 // blockBodiesData is the network packet for block content distribution.
