@@ -20,11 +20,12 @@ package trie
 import (
 	"bytes"
 	"fmt"
-
+	
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/impt"
 )
 
 var (
@@ -48,6 +49,9 @@ type LeafCallback func(leaf []byte, parent common.Hash) error
 type Trie struct {
 	db   *Database
 	root node
+	//count	[16]uint64 // (sjkim)
+	//childCount	[17]uint64
+	//nodeCount	[0x10000]uint64
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -197,7 +201,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 			if !dirty || err != nil {
 				return false, n, err
 			}
-			return true, &shortNode{n.Key, nn, t.newFlag(), n.Nonce}, nil
+			return true, &shortNode{n.Key, nn, 0, t.newFlag()}, nil
 		}
 		// Otherwise branch out at the index where they differ.
 		branch := &fullNode{flags: t.newFlag()}
@@ -215,7 +219,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 			return true, branch, nil
 		}
 		// Otherwise, replace it with a short node leading up to the branch.
-		return true, &shortNode{key[:matchlen], branch, t.newFlag(), n.Nonce}, nil
+		return true, &shortNode{key[:matchlen], branch, 0, t.newFlag()}, nil
 
 	case *fullNode:
 		dirty, nn, err := t.insert(n.Children[key[0]], append(prefix, key[0]), key[1:], value)
@@ -228,7 +232,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		return true, n, nil
 
 	case nil:
-		return true, &shortNode{key, value, t.newFlag(), 0}, nil
+		return true, &shortNode{key, value, 0, t.newFlag()}, nil
 
 	case hashNode:
 		// We've hit a part of the trie that isn't loaded yet. Load
@@ -297,9 +301,9 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			// always creates a new slice) instead of append to
 			// avoid modifying n.Key since it might be shared with
 			// other nodes.
-			return true, &shortNode{concat(n.Key, child.Key...), child.Val, t.newFlag(), n.Nonce}, nil
+			return true, &shortNode{concat(n.Key, child.Key...), child.Val, n.Nonce, t.newFlag()}, nil
 		default:
-			return true, &shortNode{n.Key, child, t.newFlag(), n.Nonce}, nil
+			return true, &shortNode{n.Key, child, n.Nonce, t.newFlag()}, nil
 		}
 
 	case *fullNode:
@@ -345,12 +349,12 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 				}
 				if cnode, ok := cnode.(*shortNode); ok {
 					k := append([]byte{byte(pos)}, cnode.Key...)
-					return true, &shortNode{k, cnode.Val, t.newFlag(), n.Nonce}, nil
+					return true, &shortNode{k, cnode.Val, n.Nonce, t.newFlag()}, nil
 				}
 			}
 			// Otherwise, n is replaced by a one-nibble short node
 			// containing the child.
-			return true, &shortNode{[]byte{byte(pos)}, n.Children[pos], t.newFlag(), n.Nonce}, nil
+			return true, &shortNode{[]byte{byte(pos)}, n.Children[pos], n.Nonce, t.newFlag()}, nil
 		}
 		// n still contains at least two values and cannot be reduced.
 		return true, n, nil
@@ -405,7 +409,26 @@ func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 // Hash returns the root hash of the trie. It does not write to the
 // database and can be used even if the trie doesn't have one.
 func (t *Trie) Hash() common.Hash {
-	hash, cached, _ := t.hashRoot(nil, nil)
+	hash, cached, _ := t.hashRoot(nil, nil, nil, false, 0)
+	t.root = cached
+	return common.BytesToHash(hash.(hashNode))
+}
+
+// HashWithNonce returns the root hash of the indexed MPT and the IMPT mining results.
+// It recursively does mining work for each state trie node and stores the mining results.
+// It does not write to the database and can be used even if the trie doesn't have one.
+func (t *Trie) HashWithNonce(blockNum uint64) (common.Hash, []*impt.TrieNonce) {
+	trieNonces := []*impt.TrieNonce{}
+	hash, cached, _ := t.hashRoot(nil, nil, &trieNonces, true, blockNum)
+	t.root = cached
+	return common.BytesToHash(hash.(hashNode)), trieNonces
+}
+
+// HashByNonce returns the root hash of the indexed MPT which node is indexed by the trieNonces field in the block body. 
+// It modifies each state trie node of locals to the indexed one by miner.
+// It does not write to the database and can be used even if the trie doesn't have one.
+func (t *Trie) HashByNonce(trieNonces []*impt.TrieNonce, blockNum uint64) common.Hash {
+	hash, cached, _ := t.hashRoot(nil, nil, &trieNonces, false, blockNum)
 	t.root = cached
 	return common.BytesToHash(hash.(hashNode))
 }
@@ -416,7 +439,7 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	if t.db == nil {
 		panic("commit called on trie with nil database")
 	}
-	hash, cached, err := t.hashRoot(t.db, onleaf)
+	hash, cached, err := t.hashRoot(t.db, onleaf, nil, false, 0)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -424,13 +447,13 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	return common.BytesToHash(hash.(hashNode)), nil
 }
 
-func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
+func (t *Trie) hashRoot(db *Database, onleaf LeafCallback, trieNonces *[]*impt.TrieNonce, isMining bool, blockNum uint64) (node, node, error) {
 	if t.root == nil {
 		return hashNode(emptyRoot.Bytes()), nil, nil
 	}
 	h := newHasher(onleaf)
 	defer returnHasherToPool(h)
-	return h.hash(t.root, db, true)
+	return h.hash(t.root, db, true, trieNonces, isMining, blockNum)
 }
 
 func (t *Trie) Size() common.StorageSize {
@@ -453,10 +476,142 @@ func (t *Trie) Print() {
 		fmt.Println("empty trie ( empty root hash:", t.Hash().Hex(), ")")
 		return
 	} 
-	
+
 	fmt.Println(t.root.infostring("", t.db))
 }
 
+/*
+// PrintNodeNum prints the # of each node type (sjkim)
+func (t *Trie) PrintNodeNum(file *os.File) {
+	for i := 0; i < 16; i++ {
+		t.count[i] = 0
+		t.childCount[i] = 0
+	}
+	t.childCount[16] = 0
+	for i := 0; i < 0x10000; i++ {
+		t.nodeCount[i] = 0
+	}
+
+	wr := csv.NewWriter(bufio.NewWriter(file))
+
+	t.countNodeNum(t.root, nil)
+
+	countStr := []string{}
+
+	for i := 0; i < 16; i++ {
+		countStr = append(countStr, strconv.FormatUint(t.count[i], 10))
+	}
+
+	//wr.Write(countStr)
+	//wr.Flush()
+
+	for i := 0; i < 17; i++ {
+		countStr = append(countStr, strconv.FormatUint(t.childCount[i], 10))
+	}
+
+	var branchCollision [5]uint64
+	var leafCollision [5]uint64
+	
+	for i := 0; i < 0x1000; i++ {
+		if t.nodeCount[i] == 1 {
+			branchCollision[0]++
+		} else if t.nodeCount[i] > 1  && t.nodeCount[i] <= 10 {
+			branchCollision[1]++
+		} else if t.nodeCount[i] > 10 && t.nodeCount[i] <= 100 {
+			branchCollision[2]++
+		} else if t.nodeCount[i] > 100 && t.nodeCount[i] <= 1000 {
+			branchCollision[3]++
+		} else if t.nodeCount[i] > 1000 {
+			branchCollision[4]++
+			fmt.Print(i, " ")
+		} 
+	}
+	
+	for i := 0x1000; i < 0x10000; i++ {
+		if t.nodeCount[i] == 1 {
+			leafCollision[0]++
+		} else if t.nodeCount[i] > 1  && t.nodeCount[i] <= 10 {
+			leafCollision[1]++
+		} else if t.nodeCount[i] > 10 && t.nodeCount[i] <= 100 {
+			leafCollision[2]++
+		} else if t.nodeCount[i] > 100 && t.nodeCount[i] <= 1000 {
+			leafCollision[3]++
+		} else if t.nodeCount[i] > 1000 {
+			leafCollision[4]++
+			//fmt.Print(i, " ")
+		} 
+	}
+
+	for i := 0; i < 5; i++ {
+		countStr = append(countStr, strconv.FormatUint(branchCollision[i], 10))
+	}
+
+	for i := 0; i < 5; i++ {
+		countStr = append(countStr, strconv.FormatUint(leafCollision[i], 10))
+	}
+
+	wr.Write(countStr)
+	wr.Flush()
+
+
+
+}
+
+// (sjkim)
+func (t *Trie) countNodeNum(n node, prefix []byte) {
+	switch n := n.(type) {
+	case *fullNode:
+		t.count[0]++
+		childNum := 0
+		for i, child := range &n.Children {
+			t.countNodeNum(child, append(prefix, byte(i)))
+			if child != nil {
+				childNum++
+			}
+		}
+		t.childCount[childNum]++
+		if n.flags.hash != nil {
+			b := make([]byte, 6, 8)
+			b = append(b, []byte(n.flags.hash[:2])...)
+			var bi [8]byte
+			copy(bi[:], b)
+			//fmt.Println(b, int(binary.BigEndian.Uint64(bi[:])))
+			t.nodeCount[int(binary.BigEndian.Uint64(bi[:]))]++
+		}
+
+		//t.nodeCount[binary.BigEndian.Uint64(b)]++
+	case *shortNode:
+		//hashPrefix := hexToHashPrefix(n.Key)
+		//t.count[hashPrefix[0]>>4]++
+		if n.Key[len(n.Key)-1] != 16 && len(n.Key) < 16 {
+			t.count[len(n.Key)]++
+		} else {
+			t.count[15]++
+		}
+		t.countNodeNum(n.Val, append(prefix, n.Key...))
+		if n.flags.hash != nil {
+			b := make([]byte, 6, 8)
+			b = append(b, []byte(n.flags.hash[:2])...)
+			var bi [8]byte
+			copy(bi[:], b)
+			//fmt.Println(b, int(binary.BigEndian.Uint64(bi[:])))
+			t.nodeCount[int(binary.BigEndian.Uint64(bi[:]))]++
+		}
+
+		//t.nodeCount[binary.BigEndian.Uint64(b)]++
+	case valueNode:
+		return
+	case hashNode:
+		rn, err := t.resolveHash(n, prefix)
+		if err != nil {
+			return 
+		}
+		t.countNodeNum(rn, prefix)
+	default:
+		return
+	}
+}
+*/
 func (t *Trie) SetRootNonce(newNonce uint64){
 	if t.root == nil {
 		fmt.Println("Error: cannot set nil root node's nonce")
@@ -475,3 +630,38 @@ func (t *Trie) GetNodeCache(){
 	fmt.Println(t.root.cache())
 	fmt.Println("node nonce:", t.root.getNonce())
 }
+
+/*
+func _nonceMatched(n node, hash []byte) bool {
+	switch n := n.(type) {
+	case *shortNode:
+		//return true // fast mining
+		keyHashPrefix := compactToHashPrefix(n.Key)
+		//fmt.Println("key:", key, "\n") 	
+		//fmt.Println("keyHashPrefix:", keyHashPrefix, "\n") 
+		//fmt.Println("hash:", hash[:len(keyHashPrefix)], "\n") 
+		return bytes.Equal(hash[:len(keyHashPrefix)], keyHashPrefix)
+	case *fullNode:
+		numOfChildren := 0
+		var tmp [2]int
+		idx := 0
+		for i := 0; i < len(n.Children); i++ {
+			if n.Children[i] != nil {
+				if numOfChildren < 2 {
+					tmp[idx] = i
+					idx++
+				}
+				numOfChildren++
+			}
+		}
+		buf := make([]byte, 2)
+		buf[0] = byte(numOfChildren%16)
+		buf[1] = byte(tmp[0]) << 4
+		buf[1] |= byte(tmp[1]) 
+		
+		return bytes.Equal(hash[:2], buf)
+	default:
+		return false
+	}
+}
+*/
