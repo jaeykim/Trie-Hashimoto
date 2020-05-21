@@ -310,36 +310,59 @@ func (h *hasher) makeHashNode(data []byte) hashNode {
 	return n
 }
 
-func modifyHash(n node, hash hashNode) hashNode {
+// prefixing impt trie node hash with the custom prefixing policy 
+// func modifyHash(n node, hash hashNode) hashNode {
+
+// 	fmt.Println("NextBlockNumber in modifyHash():", common.NextBlockNumber)
    
+// 	newHash := hashNode(hash)
+// 	copy(newHash, hash)
+// 	switch n := n.(type) {
+// 	case *shortNode:
+	   
+// 	   keyHashPrefix := compactToHashPrefix(n.Key)
+// 	   copy(newHash[:len(keyHashPrefix)], keyHashPrefix)
+// 	   return newHash
+	   
+// 	case *fullNode:
+// 	   numOfChildren := 0
+// 	   var tmp [4]int
+// 	   idx := 0
+// 	   for i := 0; i < len(n.Children); i++ {
+// 		  if n.Children[i] != nil {
+// 			 if numOfChildren < 4 {
+// 				tmp[idx] = i
+// 				idx++
+// 			 }
+// 			 numOfChildren++
+// 		  }
+// 	   }
+// 	   newHash[0] = byte(numOfChildren%16)
+// 	   newHash[1] = byte(tmp[0]) << 4
+// 	   newHash[1] |= byte(tmp[1])
+// 	   newHash[2] = byte(tmp[2]) << 4
+// 	   newHash[2] |= byte(tmp[3])
+// 	   return newHash 
+// 	default:
+// 	   return nil
+// 	}
+//  }
+
+// prefixing impt trie node hash with current block number
+ func modifyHash(n node, hash hashNode) hashNode {
+   
+	// fmt.Println("NextBlockNumber in modifyHash():", common.NextBlockNumber)
+	blockNum := common.NextBlockNumber
+ 
+	bs := make([]byte, 8)
+	binary.BigEndian.PutUint64(bs, blockNum)
+ 
 	newHash := hashNode(hash)
 	copy(newHash, hash)
-	switch n := n.(type) {
-	case *shortNode:
-	   
-	   keyHashPrefix := compactToHashPrefix(n.Key)
-	   copy(newHash[:len(keyHashPrefix)], keyHashPrefix)
+	switch n.(type) {
+	case *shortNode, *fullNode:
+	   copy(newHash[:5], bs[3:])
 	   return newHash
-	   
-	case *fullNode:
-	   numOfChildren := 0
-	   var tmp [4]int
-	   idx := 0
-	   for i := 0; i < len(n.Children); i++ {
-		  if n.Children[i] != nil {
-			 if numOfChildren < 4 {
-				tmp[idx] = i
-				idx++
-			 }
-			 numOfChildren++
-		  }
-	   }
-	   newHash[0] = byte(numOfChildren%16)
-	   newHash[1] = byte(tmp[0]) << 4
-	   newHash[1] |= byte(tmp[1])
-	   newHash[2] = byte(tmp[2]) << 4
-	   newHash[2] |= byte(tmp[3])
-	   return newHash 
 	default:
 	   return nil
 	}
