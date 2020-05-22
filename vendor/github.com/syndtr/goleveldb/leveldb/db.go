@@ -44,6 +44,9 @@ type DB struct {
 	nonLevel0Comp uint32 // The cumulative number of non-level0 compaction
 	seekComp      uint32 // The cumulative number of seek compaction
 
+	// move statistic (jmlee)
+	moveComp	uint32	// the cumulative number of move compaction
+
 	// Session.
 	s *session
 
@@ -1034,7 +1037,7 @@ func (db *DB) GetProperty(name string) (value string, err error) {
 				level, len(tables), float64(tables.size())/1048576.0, duration.Seconds(),
 				float64(read)/1048576.0, float64(write)/1048576.0)
 		}
-		value += fmt.Sprintf("%d,%d,%d,%d,\n", atomic.LoadUint32(&db.memComp), atomic.LoadUint32(&db.level0Comp), atomic.LoadUint32(&db.nonLevel0Comp), atomic.LoadUint32(&db.seekComp))
+		value += fmt.Sprintf("%d,%d,%d,%d,%d,\n", atomic.LoadUint32(&db.memComp), atomic.LoadUint32(&db.level0Comp), atomic.LoadUint32(&db.nonLevel0Comp), atomic.LoadUint32(&db.seekComp), atomic.LoadUint32(&db.moveComp))
 	default:
 		err = ErrNotFound
 	}

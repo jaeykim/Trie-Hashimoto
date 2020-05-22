@@ -567,6 +567,7 @@ func (db *DB) tableCompaction(c *compaction, noTrivial bool) {
 		rec.delTable(c.sourceLevel, t.fd.Num)
 		rec.addTableFile(c.sourceLevel+1, t)
 		db.compactionCommit("table-move", rec)
+		atomic.AddUint32(&db.moveComp, 1)
 		return
 	}
 
