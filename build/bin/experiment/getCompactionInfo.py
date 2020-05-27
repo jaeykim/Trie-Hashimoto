@@ -4,12 +4,12 @@ mpl.use('Agg')
 import matplotlib.pyplot as plt
 import sys
 
-LogFilePath = 'imptData/impt_data_blockNum_indexed/impt_leveldb_compaction_log.txt'
-GraphPath = 'collectedData/imptGraph/blockNumPolicy/'  # impt graph image path
+LOGFILEPATH = 'imptData/impt_data_original_geth/impt_leveldb_compaction_log.txt'
+GRAPHPATH = 'collectedData/imptGraph/blockNumPolicy/'  # impt graph image path
 
-DBNUM = 2   # num of db in the log file
+DBNUM = 1   # num of db in the log file
 MAXLEVEL = 5   # max num of levels in levelDB (ex. 5 means level 0~4 exists)
-LOGCOLUMNS = 5 # num of log columns (tableCount, tableSize, duration, readSize, writeSize)
+
 dbIndex = 0 # db index (0: totaldb, 1: trieDB0, 2: trieDB1, ...)
 maxBlockNum = 0 # max block number in the log file
 
@@ -34,11 +34,10 @@ def enum(*sequential, **named):
     enums = dict(zip(sequential, range(len(sequential))), **named)
     return type('Enum', (), enums)
 
-# ex. print(Columns.TABLE_COUNT) -> 0
-Columns = enum('TABLE_COUNT','TABLE_SIZE','DURATION', 'READ_SIZE', 'WRITE_SIZE')
-
 # DBInfos[dbIndex][level][column]
 # ex. DBInfos[0][1][2] means in totalDB, in level 1's duration time list for every blocks
+LOGCOLUMNS = 5 # num of log columns (tableCount, tableSize, duration, readSize, writeSize)
+Columns = enum('TABLE_COUNT','TABLE_SIZE','DURATION', 'READ_SIZE', 'WRITE_SIZE')
 DBInfos = FourD(0, LOGCOLUMNS, MAXLEVEL, DBNUM)
 
 # CompactionCounts[dbIndex][column]
@@ -50,15 +49,15 @@ CompactionCounts = ThreeD(0, COMPACTIONCOLUMNS, DBNUM)
 
 
 # read data from log file
-f = open(LogFilePath, 'r')
+f = open(LOGFILEPATH, 'r')
 rdr = csv.reader(f)
 cnt = 0
 
 for line in rdr:
 
-    cnt = cnt + 1
-    if cnt == 100:  # finish at block 11
-        break
+    # cnt = cnt + 1
+    # if cnt == 100:  # finish at block 11
+    #     break
 
     if len(line) == 0:
         continue
@@ -78,19 +77,6 @@ for line in rdr:
             # moveComp = int(line[4])
 
             # append compaction count to the list
-            # CompactionCounts[dbIndex][CompactionColumns.MEMCOMP].append(memComp)
-            # CompactionCounts[dbIndex][CompactionColumns.LEVEL0COMP].append(level0Comp)
-            # CompactionCounts[dbIndex][CompactionColumns.NONLEVEL0COMP].append(nonLevel0Comp)
-            # CompactionCounts[dbIndex][CompactionColumns.SEEKCOMP].append(seekComp)
-            # CompactionCounts[dbIndex][CompactionColumns.MOVECOMP].append(moveComp)
-
-            # append compaction count to the list
-            # CompactionCounts[dbIndex][CompactionColumns.MEMCOMP].append(int(line[0]))
-            # CompactionCounts[dbIndex][CompactionColumns.LEVEL0COMP].append(int(line[1]))
-            # CompactionCounts[dbIndex][CompactionColumns.NONLEVEL0COMP].append(int(line[2]))
-            # CompactionCounts[dbIndex][CompactionColumns.SEEKCOMP].append(int(line[3]))
-            # CompactionCounts[dbIndex][CompactionColumns.MOVECOMP].append(int(line[4]))
-
             for i in range(COMPACTIONCOLUMNS):
                 CompactionCounts[dbIndex][i].append(int(line[i]))
 
@@ -99,7 +85,6 @@ for line in rdr:
         else:
             # find leveldb info log
             print("find leveldb info log")
-            print(" ", line)
             level = int(line[0])
             tables = int(line[1])
             tablesSize = float(line[2])    # MB
@@ -180,7 +165,7 @@ for i in range(DBNUM):
             plt.scatter(blockNums[-len(DBInfos[i][level][column]):], DBInfos[i][level][column], s=1) # draw scatter graph
 
             # save graph
-            plt.savefig(GraphPath + graphTitle)
+            plt.savefig(GRAPHPATH + graphTitle)
 
 print("Draw levelDB compaction graph")
 for i in range(DBNUM):
@@ -221,6 +206,6 @@ for i in range(DBNUM):
         plt.scatter(blockNums, CompactionCounts[i][column], s=1) # draw scatter graph
 
         # save graph
-        plt.savefig(GraphPath + graphTitle)
+        plt.savefig(GRAPHPATH + graphTitle)
 
 print("Done!")
