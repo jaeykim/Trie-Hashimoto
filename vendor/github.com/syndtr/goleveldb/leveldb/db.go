@@ -766,12 +766,18 @@ func memGet(mdb *memdb.DB, ikey internalKey, icmp *iComparer) (ok bool, mv []byt
 func (db *DB) get(auxm *memdb.DB, auxt tFiles, key []byte, seq uint64, ro *opt.ReadOptions) (value []byte, err error) {
 	ikey := makeInternalKey(nil, key, seq, keyTypeSeek)
 
+	// Get() 함수에서 auxm = nil로 들어오기에 여긴 무시 (jmlee)
 	if auxm != nil {
 		if ok, mv, me := memGet(auxm, ikey, db.s.icmp); ok {
 			return append([]byte{}, mv...), me
 		}
 	}
 
+	// getMems() 함수가 모든 memory db를 가져오는건데 (jmlee)
+	// 이게 leveldb 구조를 보면 memtable에 먼저 들어오고 이후 immutable memtable로 옮겨진 후에 (둘 다 memory에 위치)
+	// dump를 통해 memory에서 disk로, 즉 immutable memtable에서 level0로 들어가게 됨
+	// 이후 compaction을 통해 level0에서 더 높은 레벨로 들어가게 됨
+	// 이 코드는 아마 memtable, immutable memtable 을 가져와서 (em, fm) 거기서 먼저 찾아보는 코드인거 같음
 	em, fm := db.getMems()
 	for _, m := range [...]*memDB{em, fm} {
 		if m == nil {
@@ -780,10 +786,15 @@ func (db *DB) get(auxm *memdb.DB, auxt tFiles, key []byte, seq uint64, ro *opt.R
 		defer m.decref()
 
 		if ok, mv, me := memGet(m.DB, ikey, db.s.icmp); ok {
+			fmt.Println("@@@ FIND THE VALUE!: at memory")
 			return append([]byte{}, mv...), me
 		}
 	}
 
+	// 자 위에서는 memory 영역에서 찾아보는 거였고 거기 없으면 일로 오게 되는데 (jmlee)
+	// db.s는 session type인데 찾아보면 session represent a persistent database session 라고 함
+	// 여기가 아마 disk에서 찾아보라는 내용인거 같음
+	// v.get()을 통해서 disk에서 찾아오게 되는거 같음
 	v := db.s.version()
 	value, cSched, err := v.get(auxt, ikey, ro, false)
 	v.release()
@@ -843,6 +854,7 @@ func (db *DB) has(auxm *memdb.DB, auxt tFiles, key []byte, seq uint64, ro *opt.R
 // The returned slice is its own copy, it is safe to modify the contents
 // of the returned slice.
 // It is safe to modify the contents of the argument after Get returns.
+// trie node 찾을 때는 ro = nil로 넘어오니까 무시해도 됨 (jmlee)
 func (db *DB) Get(key []byte, ro *opt.ReadOptions) (value []byte, err error) {
 	err = db.ok()
 	if err != nil {
