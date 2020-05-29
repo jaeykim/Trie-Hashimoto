@@ -266,7 +266,8 @@ func (v *version) get(aux tFiles, ikey internalKey, ro *opt.ReadOptions, noValue
 					// level1 이상에서 원하던 값을 찾았다면 찾은 것으로 확정지어버리는 듯
 					switch fkt {
 					case keyTypeVal:
-						fmt.Println("@@FIND THE VALUE!: at level", level) // 여긴 level1 이상이 나옴
+						// fmt.Println("@@FIND THE VALUE!: at level", level) // 여긴 level1 이상이 나옴
+						logLevelInfo(level)
 						value = fval
 						err = nil
 					case keyTypeDel:
@@ -292,7 +293,8 @@ func (v *version) get(aux tFiles, ikey internalKey, ro *opt.ReadOptions, noValue
 		if zfound {
 			switch zkt {
 			case keyTypeVal:
-				fmt.Println("@FIND THE VALUE!: at level", level) // 여긴 level0가 나옴
+				// fmt.Println("@FIND THE VALUE!: at level", level) // 여긴 level0가 나옴
+				logLevelInfo(level)
 				value = zval
 				err = nil
 			case keyTypeDel:

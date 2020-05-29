@@ -786,7 +786,8 @@ func (db *DB) get(auxm *memdb.DB, auxt tFiles, key []byte, seq uint64, ro *opt.R
 		defer m.decref()
 
 		if ok, mv, me := memGet(m.DB, ikey, db.s.icmp); ok {
-			fmt.Println("@@@ FIND THE VALUE!: at memory")
+			// fmt.Println("@@@ FIND THE VALUE!: at memory")
+			logLevelInfo(-1) // -1 means memorydb
 			return append([]byte{}, mv...), me
 		}
 	}
