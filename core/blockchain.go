@@ -47,6 +47,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
+
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var (
@@ -683,7 +685,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 	common.NextBlockNumber++
 
 
-	
+
 	// inspect leveldb stats
 	f, err = os.OpenFile("/home/jmlee/go/src/github.com/ethereum/go-ethereum/build/bin/experiment/impt_leveldb_compaction_log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -694,14 +696,25 @@ func (bc *BlockChain) insert(block *types.Block) {
 	// log for total db
 	totalDBStat, _ := bc.db.Stat("leveldb.impt")
 	logData += totalDBStat + "\n"
-	// fmt.Println(totalDBStat)
+	// fmt.Println("totalDBStat\n", totalDBStat)
 
 	// log for trie node db
-	// trieDBStat, = := trie.GlobalTrieNodeDB[0].Stat("leveldb.impt")
+	// trieDBStat, _ := trie.GlobalTrieNodeDB[0].Stat("leveldb.impt")
 	// logData += trieDBStat + "\n"
 	// fmt.Println(trieDBStat)
 
 	logData += "inserted block " + bc.CurrentBlock().Header().Number.String() + " ------------------------------\n"
+	fmt.Fprintln(f, logData)
+	f.Close()
+
+
+
+	// log for which level info
+	f, err = os.OpenFile(leveldb.LogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Info("ERR", "err", err)
+	}
+	logData = "inserted block " + bc.CurrentBlock().Header().Number.String() + "\n"
 	fmt.Fprintln(f, logData)
 	f.Close()
 	
