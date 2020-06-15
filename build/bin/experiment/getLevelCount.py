@@ -9,8 +9,8 @@ LogFilePath = 'imptData/impt_data_blockNum_indexed_level_logging/impt_which_leve
 
 GraphPath = 'collectedData/imptGraph/levelCount/'  # impt graph image path
 
-MAXLEVEL = 6    # max num of levels in levelDB (ex. 5 means level 0~4 exists), and MAXLEVEL means memory level (ex. 5 = memory level)
-MAXBLOCKNUM = 800000 + 1    # max num of block, it can be bigger but not smaller
+MAXLEVEL = 7    # max num of levels in levelDB (ex. 5 means level 0~4 exists), and MAXLEVEL means memory level (ex. when MAXLEVEL=5, level 4 means memory db)
+MAXBLOCKNUM = 800000 + 1    # max num of block (ex. 800000 + 1 means block 0 ~ 800000)
 
 # make empty 2d list -> list[b][a]
 def TwoD(a, b): 
@@ -40,18 +40,20 @@ for line in rdr:
         levelCount[levelNum][blockNum] = levelCount[levelNum][blockNum] + 1
     
     if len(words) == 3:
+        blockNum = int(words[-1])
         print("at block", blockNum)
         for i in range(MAXLEVEL):
             if i < MAXLEVEL - 1:
                 print(" level", i, "count:", levelCount[i][blockNum])
             else:
                 print(" memory db count:", levelCount[i][blockNum])
+        blockNum = blockNum + 1
+        if blockNum == MAXBLOCKNUM:
+            break
         print()
 
-        blockNum = int(words[-1])
-
     # cnt = cnt + 1
-    # if cnt == 1000:
+    # if cnt == 100:
     #     break
 
 f.close()
@@ -103,5 +105,36 @@ for level in range(MAXLEVEL):
         graphName = "accumulativeSearchCount_MemoryDB"
     plt.savefig(GraphPath+graphName)
 
+
+print("drawing total accumulative graphs...")
+plt.figure()    # set new graph
+plt.title('total accumulative search count', pad=10) # set graph title
+plt.xlabel('Block Number', labelpad=10)                 # set x axis
+plt.ylabel('Count', labelpad=10)                        # set y axis
+blockNums = list(range(0, MAXBLOCKNUM))
+
+colors = ['red', 'black', 'blue', 'brown', 'green', 'cyan', 'magenta']
+colors = colors[:MAXLEVEL]
+for i in range(len(colors)):
+    label = "level " + str(i)
+    if i == MAXLEVEL-1:
+        label = "memory db"
+    plt.plot(blockNums, levelCount[i], color=colors[i], label=label)
+plt.legend(loc='best')
+
+# save graph
+graphName = "accumulativeSearchCount_total"
+plt.savefig(GraphPath+graphName)
+
+print("final result")
+totalSearchCount = 0
+for i in range(MAXLEVEL):
+    totalSearchCount = totalSearchCount + levelCount[i][MAXBLOCKNUM-1]
+
+for i in range(MAXLEVEL):
+    if i < MAXLEVEL - 1:
+        print(" level", i, "count:", levelCount[i][MAXBLOCKNUM-1], "(", float(levelCount[i][MAXBLOCKNUM-1]*100/totalSearchCount), "% )")
+    else:
+        print(" memory db count:", levelCount[i][MAXBLOCKNUM-1], "(", float(levelCount[i][MAXBLOCKNUM-1]*100/totalSearchCount), "% )")
 
 print("DONE")
