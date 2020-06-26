@@ -45,6 +45,8 @@ type keccakState interface {
 
 type sliceBuffer []byte
 
+var fakeIMPT bool = true
+
 func (b *sliceBuffer) Write(data []byte) (n int, err error) {
 	*b = append(*b, data...)
 	return len(data), nil
@@ -250,49 +252,49 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]*impt.Tri
 			} else if isMining {
 				// Used for HashWithNonce()
 				// Make new hashNode even if hashNode info already exists in cache
-				/*
 				hash = h.makeHashNode(h.tmp)
 				oldHash := common.BytesToHash(hash)
-				hash = modifyHash(n, hash)
-				newHash := common.BytesToHash(hash)
-				*trieNonces = append(*trieNonces, impt.NewTrieNonce(oldHash, newHash, nonce))
-				fmt.Printf("hasher.store(), HashWithNonce, <%x>, <%x>, %d\n", oldHash, newHash, nonce)
-				*/
-				hash = h.makeHashNode(h.tmp)
-				oldHash := common.BytesToHash(hash)
-				var newHash common.Hash
-				for ; ; nonce++ {
-					h.tmp.Reset()
-					n.setNonce(nonce)
-					if err := rlp.Encode(&h.tmp, n); err != nil {
-						panic("encode error: " + err.Error())
-					}
-					hash = h.makeHashNode(h.tmp)
-					// If the hash has the valid hash prefix, store the result
-					if validHashNode(hash, blockNum) {
-						newHash = common.BytesToHash(hash)
-						nonce = n.getNonce()
-						*trieNonces = append(*trieNonces, impt.NewTrieNonce(oldHash, newHash, nonce))
-						break
-					}
-				}
-			} else if !isMining {
-				// Used for HashByNonce()
-				// Make new hashNode even if hashNode info already exists in cache
-				hash = h.makeHashNode(h.tmp)
-				okay := false
-				_hash := common.BytesToHash(hash)
-				for _, trieNonce := range *trieNonces {
-					// Update normal MPT node to indexed MPT node
-					// Set nonce and generate new hashNode
-					if _hash == trieNonce.Before() {
+				var newHash common.Hash 
+				if fakeIMPT {
+					hash = modifyHash(n, hash, blockNum)
+				} else {
+					for ; ; nonce++ {
 						h.tmp.Reset()
-						nonce = trieNonce.Nonce()
 						n.setNonce(nonce)
 						if err := rlp.Encode(&h.tmp, n); err != nil {
 							panic("encode error: " + err.Error())
 						}
 						hash = h.makeHashNode(h.tmp)
+						// If the hash has the valid hash prefix, store the result
+						if validHashNode(hash, blockNum) {
+							break
+						}
+					}
+				}
+				newHash = common.BytesToHash(hash)
+				nonce = n.getNonce()
+				*trieNonces = append(*trieNonces, impt.NewTrieNonce(oldHash, newHash, nonce))
+			} else if !isMining {
+				// Used for HashByNonce()
+				// Make new hashNode even if hashNode info already exists in cache
+				hash = h.makeHashNode(h.tmp)
+				okay := false
+				oldHash := common.BytesToHash(hash)
+				for _, trieNonce := range *trieNonces {
+					// Update normal MPT node to indexed MPT node
+					// Set nonce and generate new hashNode
+					if oldHash == trieNonce.Before() {
+						if fakeIMPT {
+							hash = modifyHash(n, hash, blockNum)				
+						} else {
+							h.tmp.Reset()
+							nonce = trieNonce.Nonce()
+							n.setNonce(nonce)
+							if err := rlp.Encode(&h.tmp, n); err != nil {
+								panic("encode error: " + err.Error())
+							}
+							hash = h.makeHashNode(h.tmp)
+						}
 						// Panic if it generates different hashNode or the hash is not valid
 						if common.BytesToHash(hash) != trieNonce.After() || !validHashNode(hash, blockNum) {
 							panic("HashByNonce error")
@@ -355,12 +357,30 @@ func (h *hasher) makeHashNode(data []byte) hashNode {
 func validHashNode(hash []byte, blockNum uint64) bool {
 	bs := make([]byte, 8)
     binary.BigEndian.PutUint64(bs, blockNum)
-	return bytes.Equal(hash[:2], bs[6:])
+	return bytes.Equal(hash[:3], bs[5:])
 }
 
 // modifyHash returns a new hashNode without finding proper nonce
 // Just overlap the hash prefix with what we want
-func modifyHash(n node, hash hashNode) hashNode {
+func modifyHash(n node, hash hashNode, blockNum uint64) hashNode {
+	
+	// var blockNum = uint64(100)
+
+	bs := make([]byte, 8)
+    binary.BigEndian.PutUint64(bs, blockNum)
+
+	newHash := hashNode(hash)
+	copy(newHash, hash)
+	switch n.(type) {
+	case *shortNode, *fullNode:
+		copy(newHash[:3], bs[5:])
+		return newHash
+	default:
+		return nil
+	}
+}
+
+func _modifyHash(n node, hash hashNode) hashNode {
 	
 	newHash := hashNode(hash)
 	copy(newHash, hash)
@@ -390,24 +410,6 @@ func modifyHash(n node, hash hashNode) hashNode {
 		newHash[2] = byte(tmp[2]) << 4
 		newHash[2] |= byte(tmp[3])
 		return newHash 
-	default:
-		return nil
-	}
-}
-
-func _modifyHash(n node, hash hashNode) hashNode {
-	
-	var blockNum = uint64(100)
-
-	bs := make([]byte, 8)
-    binary.BigEndian.PutUint64(bs, blockNum)
-
-	newHash := hashNode(hash)
-	copy(newHash, hash)
-	switch n.(type) {
-	case *shortNode, *fullNode:
-		copy(newHash[:5], bs[3:])
-		return newHash
 	default:
 		return nil
 	}
