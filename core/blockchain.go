@@ -23,13 +23,12 @@ import (
 	"io"
 	"math/big"
 	mrand "math/rand"
+	"os/exec"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-	"strings"
-	"os/exec"
-	"strconv"
-	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -47,8 +46,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
-
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var (
@@ -632,39 +629,40 @@ func (bc *BlockChain) insert(block *types.Block) {
 		headFastBlockGauge.Update(int64(block.NumberU64()))
 	}
 
-	// print database inspecting result per size check epoch
-	// if block.Number().Uint64()%common.InspectingDatabaseEpoch == 0 {
-	// 	rawdb.InspectDatabase(rawdb.GlobalDB)
-	// }
+	// print & log database inspecting result per size check epoch
+	if block.Number().Uint64()%common.InspectingDatabaseEpoch == 0 {
+		result := rawdb.InspectDatabaseGetResult(rawdb.GlobalDB) // KiB bytes log
+		common.LogToFile("impt_database_inspect.txt", result)
+	}
 
 	// print blocknum & leveldbs size for impt data log
 	dbPath := "/home/jmlee/data/impt/db_full/geth/"
 	logData := ""
 	// fmt.Println("block", bc.CurrentBlock().Header().Number, "is inseted")
 	logData += bc.CurrentBlock().Header().Number.String() + ","
-	for i:=0; i<len(trie.GlobalTrieNodeDB); i++{
-		sizeCmd := exec.Command("du", "-sk", dbPath + "indexedNodes/index"+strconv.Itoa(i))
+	for i := 0; i < len(trie.GlobalTrieNodeDB); i++ {
+		sizeCmd := exec.Command("du", "-sk", dbPath+"indexedNodes/index"+strconv.Itoa(i))
 		sizeCmdOutput, err := sizeCmd.Output()
 		sizeKB := ""
 		if err != nil {
 			// panic(err)
 			// if fail to cmd du -sk, just write db size = 0
 			sizeKB = "0"
-		} else{
-			output:= strings.Split(string(sizeCmdOutput), "	")
+		} else {
+			output := strings.Split(string(sizeCmdOutput), "	")
 			sizeKB = output[0]
 		}
 		// fmt.Println("trie db", i, "size (KB):", sizeKB)
 		logData += sizeKB + ","
 	}
-	sizeCmd := exec.Command("du", "-sk", dbPath + "chaindata")
+	sizeCmd := exec.Command("du", "-sk", dbPath+"chaindata")
 	sizeCmdOutput, err := sizeCmd.Output()
 	sizeKB := ""
 	if err != nil {
 		// panic(err)
 		sizeKB = "0"
 	} else {
-		output:= strings.Split(string(sizeCmdOutput), "	")
+		output := strings.Split(string(sizeCmdOutput), "	")
 		sizeKB = output[0]
 	}
 	// fmt.Println("total db size (KB):", sizeKB)
@@ -672,27 +670,14 @@ func (bc *BlockChain) insert(block *types.Block) {
 	// fmt.Println("logData:", logData)
 	logData += "@\n"
 	// fmt.Println(logData)
-
-	// append or write logData to file
-	f, err := os.OpenFile(trie.ImptLogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Info("ERR", "err", err)
-	}
-	fmt.Fprintln(f, logData)
-	f.Close()
+	common.LogToFile("impt_data_log.txt", logData)
 
 	// increase NextBlockNumber (to prefixing impt trie node hash) (jmlee)
 	common.NextBlockNumber++
 
-
-
 	// inspect leveldb stats
-	f, err = os.OpenFile("/home/jmlee/go/src/github.com/ethereum/go-ethereum/build/bin/experiment/impt_leveldb_compaction_log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Info("ERR", "err", err)
-	}
-	logData = "leveldbInfo\n"	// lists with -> level,tables,size(MB),time(sec),read(MB),write(MB)
-	
+	logData = "leveldbInfo\n" // lists with -> level,tables,size(MB),time(sec),read(MB),write(MB)
+
 	// log for total db
 	totalDBStat, _ := bc.db.Stat("leveldb.impt")
 	logData += totalDBStat + "\n"
@@ -704,21 +689,13 @@ func (bc *BlockChain) insert(block *types.Block) {
 	// fmt.Println(trieDBStat)
 
 	logData += "inserted block " + bc.CurrentBlock().Header().Number.String() + " ------------------------------\n"
-	fmt.Fprintln(f, logData)
-	f.Close()
-
-
+	// fmt.Fprintln(f, logData)
+	// f.Close()
+	common.LogToFile("impt_leveldb_compaction_log.txt", logData)
 
 	// log for which level info
-	f, err = os.OpenFile(leveldb.LogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Info("ERR", "err", err)
-	}
 	logData = "inserted block " + bc.CurrentBlock().Header().Number.String() + "\n"
-	fmt.Fprintln(f, logData)
-	f.Close()
-	
-
+	common.LogToFile("impt_which_level.txt", logData)
 
 	// print state trie (jmlee)
 	// fmt.Println("$$$ print state trie at block", bc.CurrentBlock().Header().Number)
@@ -752,7 +729,6 @@ func (bc *BlockChain) insert(block *types.Block) {
 	// 	// fmt.Println("	value: ", it.Value())
 	// 	// fmt.Println()
 	// }
-
 
 }
 
