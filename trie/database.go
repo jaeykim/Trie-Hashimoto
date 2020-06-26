@@ -22,10 +22,9 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strconv"
 	"sync"
 	"time"
-	"strconv"
-	"os"
 
 	"github.com/allegro/bigcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -36,8 +35,8 @@ import (
 )
 
 const GlobalTrieNodeDBLength = 1
+
 var GlobalTrieNodeDB [GlobalTrieNodeDBLength]ethdb.Database
-var ImptLogFilePath = "./experiment/impt_data_log.txt"
 
 var (
 	memcacheCleanHitMeter   = metrics.NewRegisteredMeter("trie/memcache/clean/hit", nil)
@@ -106,29 +105,33 @@ type rawNode []byte
 func (n rawNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
 func (n rawNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
 func (n rawNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
-func (n rawNode) infostring(ind string, db *Database) string     { panic("this should never end up in a live trie") } // (jmlee)
-func (n rawNode) setNonce(newNonce uint64)	{ panic("this should never end up in a live trie") }
-func (n rawNode) getNonce() uint64	{ panic("this should never end up in a live trie") }
+func (n rawNode) infostring(ind string, db *Database) string {
+	panic("this should never end up in a live trie")
+}                                          // (jmlee)
+func (n rawNode) setNonce(newNonce uint64) { panic("this should never end up in a live trie") }
+func (n rawNode) getNonce() uint64         { panic("this should never end up in a live trie") }
 
 // rawFullNode represents only the useful data content of a full node, with the
 // caches and flags stripped out to minimize its data storage. This type honors
 // the same RLP encoding as the original parent.
 type rawFullNode struct {
-	Children	[17]node
-	Nonce		uint64 // nonce field for impt (sjkim)
+	Children [17]node
+	Nonce    uint64 // nonce field for impt (sjkim)
 }
 
 type rawOptFullNode struct { // Optimized full node (sjkim)
-	Children	[2]node
-	Nonce 		uint64
+	Children [2]node
+	Nonce    uint64
 }
 
 func (n rawFullNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
 func (n rawFullNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
 func (n rawFullNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
-func (n rawFullNode) infostring(ind string, db *Database) string     { panic("this should never end up in a live trie") } // (jmlee)
-func (n rawFullNode) setNonce(newNonce uint64)	{ panic("this should never end up in a live trie") }
-func (n rawFullNode) getNonce() uint64	{ 
+func (n rawFullNode) infostring(ind string, db *Database) string {
+	panic("this should never end up in a live trie")
+}                                              // (jmlee)
+func (n rawFullNode) setNonce(newNonce uint64) { panic("this should never end up in a live trie") }
+func (n rawFullNode) getNonce() uint64 {
 	//panic("this should never end up in a live trie")
 	return n.Nonce
 }
@@ -149,12 +152,16 @@ func (n rawFullNode) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, nodes)
 }
 
-func (n rawOptFullNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
-func (n rawOptFullNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
-func (n rawOptFullNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
-func (n rawOptFullNode) infostring(ind string, db *Database) string     { panic("this should never end up in a live trie") } // (jmlee)
-func (n rawOptFullNode) setNonce(newNonce uint64)	{ panic("this should never end up in a live trie") }
-func (n rawOptFullNode) getNonce() uint64	{ panic("this should never end up in a live trie") }
+func (n rawOptFullNode) canUnload(uint16, uint16) bool {
+	panic("this should never end up in a live trie")
+}
+func (n rawOptFullNode) cache() (hashNode, bool)   { panic("this should never end up in a live trie") }
+func (n rawOptFullNode) fstring(ind string) string { panic("this should never end up in a live trie") }
+func (n rawOptFullNode) infostring(ind string, db *Database) string {
+	panic("this should never end up in a live trie")
+}                                                 // (jmlee)
+func (n rawOptFullNode) setNonce(newNonce uint64) { panic("this should never end up in a live trie") }
+func (n rawOptFullNode) getNonce() uint64         { panic("this should never end up in a live trie") }
 
 func (n rawOptFullNode) EncodeRLP(w io.Writer) error {
 	var nodes [3]node
@@ -167,7 +174,7 @@ func (n rawOptFullNode) EncodeRLP(w io.Writer) error {
 		}
 	}
 	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, n.Nonce) // 
+	binary.LittleEndian.PutUint64(b, n.Nonce) //
 	nodes[2] = valueNode(b)
 	return rlp.Encode(w, nodes)
 }
@@ -176,21 +183,23 @@ func (n rawOptFullNode) EncodeRLP(w io.Writer) error {
 // caches and flags stripped out to minimize its data storage. This type honors
 // the same RLP encoding as the original parent.
 type rawShortNode struct {
-	Key 	[]byte
-	Val 	node
-	Nonce	uint64 // nonce field for impt (sjkim)
+	Key   []byte
+	Val   node
+	Nonce uint64 // nonce field for impt (sjkim)
 }
 
 func (n rawShortNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
 func (n rawShortNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
 func (n rawShortNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
-func (n rawShortNode) infostring(ind string, db *Database) string     { panic("this should never end up in a live trie") } // (jmlee)
-func (n rawShortNode) setNonce(newNonce uint64)	{ panic("this should never end up in a live trie") }
-func (n rawShortNode) getNonce() uint64	{ panic("this should never end up in a live trie") }
+func (n rawShortNode) infostring(ind string, db *Database) string {
+	panic("this should never end up in a live trie")
+}                                               // (jmlee)
+func (n rawShortNode) setNonce(newNonce uint64) { panic("this should never end up in a live trie") }
+func (n rawShortNode) getNonce() uint64         { panic("this should never end up in a live trie") }
 
 func (n rawShortNode) EncodeRLP(w io.Writer) error {
 	var nodes [3]node
-	
+
 	nodes[0] = valueNode(n.Key)
 	nodes[1] = n.Val
 	b := make([]byte, 8)
@@ -316,7 +325,7 @@ func simplifyNode(n node) node {
 				}
 			}
 			return node
-		} 
+		}
 
 	case valueNode, hashNode, rawNode:
 		return n
@@ -333,8 +342,8 @@ func expandNode(hash hashNode, n node) node {
 	case *rawShortNode:
 		// Short nodes need key and child expansion
 		return &shortNode{
-			Key: compactToHex(n.Key),
-			Val: expandNode(nil, n.Val),
+			Key:   compactToHex(n.Key),
+			Val:   expandNode(nil, n.Val),
 			Nonce: n.Nonce,
 			flags: nodeFlag{
 				hash: hash,
@@ -355,7 +364,7 @@ func expandNode(hash hashNode, n node) node {
 			}
 		}
 		return node
-	
+
 	case rawOptFullNode:
 		node := &fullNode{
 			Nonce: n.Nonce,
@@ -363,7 +372,7 @@ func expandNode(hash hashNode, n node) node {
 				hash: hash,
 			},
 		}
-		
+
 		node.Children[hash[1]/16] = expandNode(nil, n.Children[0]) // fast mining
 		node.Children[hash[1]%16] = expandNode(nil, n.Children[1]) // fast mining
 
@@ -486,14 +495,14 @@ func (db *Database) insertPreimage(hash common.Hash, preimage []byte) {
 func GetProperDBIndex(hash common.Hash) int {
 	index := string(hash.Hex()[2]) // ex. 0xea945... -> index = e
 	var dbIndex int64
-	
+
 	// indexing policy 1: 5 DBs - 0 / 1 / 2 / 3 / 4~f
 	// if index < strconv.Itoa(GlobalTrieNodeDBLength) {
 	// 	dbIndex, _ = strconv.Atoi(index)
 	// } else {
 	// 	dbIndex = GlobalTrieNodeDBLength-1
 	// }
-	
+
 	// indexing policy 2: 6 DBs - 0 / 1 / 2~3 / 4~6 / 7~a / b~f
 	// if index == "0" {	// 0
 	// 	dbIndex = 0
@@ -559,19 +568,12 @@ func (db *Database) node(hash common.Hash) node {
 	logData += strconv.Itoa(dbIndex) + ","
 	logData += strconv.Itoa(int(elapsed1.Nanoseconds())) + ","
 	logData += strconv.Itoa(int(elapsed2.Nanoseconds())) + ","
-	logData += strconv.Itoa(int((elapsed2-elapsed1).Nanoseconds())) + ","
+	logData += strconv.Itoa(int((elapsed2 - elapsed1).Nanoseconds())) + ","
 	// fmt.Println("	logData:", logData)
 	// fmt.Println(logData)
 
 	// append or write logData to file
-	f, err := os.OpenFile(ImptLogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Info("ERR", "err", err)
-	}
-	fmt.Fprintln(f, logData)
-	f.Close()
-
-
+	common.LogToFile("impt_data_log.txt", logData)
 
 	if err != nil || enc == nil {
 		return nil
@@ -629,17 +631,12 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	logData += strconv.Itoa(dbIndex) + ","
 	logData += strconv.Itoa(int(elapsed1.Nanoseconds())) + ","
 	logData += strconv.Itoa(int(elapsed2.Nanoseconds())) + ","
-	logData += strconv.Itoa(int((elapsed2-elapsed1).Nanoseconds())) + ","
+	logData += strconv.Itoa(int((elapsed2 - elapsed1).Nanoseconds())) + ","
 	// fmt.Println("	logData:", logData)
 	// fmt.Println(logData)
 
 	// append or write logData to file
-	f, err := os.OpenFile(ImptLogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Info("ERR", "err", err)
-	}
-	fmt.Fprintln(f, logData)
-	f.Close()
+	common.LogToFile("impt_data_log.txt", logData)
 
 	if err == nil && enc != nil {
 		if db.cleans != nil {
@@ -800,7 +797,7 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 //
 // Note, this method is a non-synchronized mutator. It is unsafe to call this
 // concurrently with other mutators.
-// TODO: because this function also flushes trie nodes, I have to fix this for impt. 
+// TODO: because this function also flushes trie nodes, I have to fix this for impt.
 // but this function is not called in archive mode. so just ignore this temporarily (jmlee)
 func (db *Database) Cap(limit common.StorageSize) error {
 	// Create a database batch to flush persistent data out. It is important that
@@ -911,7 +908,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	// by only uncaching existing data when the database write finalizes.
 	start := time.Now()
 	batch := db.diskdb.NewBatch()
-	
+
 	// Move all of the accumulated preimages into a write batch
 	for hash, preimage := range db.preimages {
 		if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
@@ -932,7 +929,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 		return err
 	}
 	batch.Reset()
-	
+
 	// Move the trie itself into the batch, flushing if enough data is accumulated
 	nodes, storage := len(db.dirties), db.dirtiesSize
 
@@ -990,14 +987,14 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 
 	// impt: write indexed trie node to other leveldb (jmlee)
 	// fmt.Println("in commit(), hash ", hash.Hex(), "is Put to batch")
-	
+
 	// if GlobalTrieNodeDB[0] != nil{
 
 	// 	// open the batch of proper db for the indexed trie node
 	// 	dbIndex := GetProperDBIndex(hash)
 	// 	imptBatch := GlobalTrieNodeDB[dbIndex].NewBatch()
 	// 	// fmt.Println("in commit(), node", hash.Hex(), "is in db", dbIndex)
-		
+
 	// 	// fmt.Println("imptBatch Put", hash.Hex())
 	// 	if err := imptBatch.Put(hash[:], node.rlp()); err != nil {
 	// 		fmt.Println("imptBatch Put err")
