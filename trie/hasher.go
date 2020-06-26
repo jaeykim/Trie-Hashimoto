@@ -46,6 +46,7 @@ type keccakState interface {
 type sliceBuffer []byte
 
 var fakeIMPT bool = true
+var prefixLength int = 3
 
 func (b *sliceBuffer) Write(data []byte) (n int, err error) {
 	*b = append(*b, data...)
@@ -357,7 +358,7 @@ func (h *hasher) makeHashNode(data []byte) hashNode {
 func validHashNode(hash []byte, blockNum uint64) bool {
 	bs := make([]byte, 8)
     binary.BigEndian.PutUint64(bs, blockNum)
-	return bytes.Equal(hash[:3], bs[5:])
+	return bytes.Equal(hash[:prefixLength], bs[8-prefixLength:])
 }
 
 // modifyHash returns a new hashNode without finding proper nonce
@@ -373,7 +374,7 @@ func modifyHash(n node, hash hashNode, blockNum uint64) hashNode {
 	copy(newHash, hash)
 	switch n.(type) {
 	case *shortNode, *fullNode:
-		copy(newHash[:3], bs[5:])
+		copy(newHash[:prefixLength], bs[8-prefixLength:])
 		return newHash
 	default:
 		return nil
