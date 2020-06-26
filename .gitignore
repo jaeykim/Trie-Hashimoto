@@ -46,3 +46,23 @@ profile.cov
 /dashboard/assets/package-lock.json
 
 **/yarn-error.log
+kiise/secureTrieSizeLog_10000001_100000.txt
+kiise/secureTrieSizeLog_10100001_100000.txt
+kiise/normTrieSizeLog_10100001_100000.txt
+kiise/normTrieSizeLog_10000001_100000.txt
+kiise/kiise
+kiise/gethTime.txt
+kiise/explog.txt
+kiise/compare_norm_vs_secure_trie_10100001_100000.png
+kiise/geth_vs_eth4nos_sync_time.png
+kiise/experiment
+kiise/eth4nosTime.txt
+kiise/eth4nos_draw_graph.py
+kiise/plot.py
+impt/impt
+impt/log.txt
+impt/index/index_total/000001.log
+impt/index/index_total/CURRENT
+impt/index/index_total/LOCK
+impt/index/index_total/LOG
+impt/index/index_total/MANIFEST-000000
