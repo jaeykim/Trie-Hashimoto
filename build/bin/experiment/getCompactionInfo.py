@@ -4,11 +4,12 @@ mpl.use('Agg')
 import matplotlib.pyplot as plt
 import sys
 
-LOGFILEPATH = 'imptData/impt_data_original_geth/impt_leveldb_compaction_log.txt'
-GRAPHPATH = 'collectedData/imptGraph/blockNumPolicy/'  # impt graph image path
+# LOGFILEPATH = 'imptData/impt_data_original_geth_level_logging/impt_leveldb_compaction_log.txt'
+LOGFILEPATH = 'imptData/impt_data_blockNum_indexed_level_logging/impt_leveldb_compaction_log.txt'
+GRAPHPATH = 'collectedData/imptGraph/compactionInfo/'  # impt graph image path
 
 DBNUM = 1   # num of db in the log file
-MAXLEVEL = 5   # max num of levels in levelDB (ex. 5 means level 0~4 exists)
+MAXLEVEL = 7   # max num of levels in levelDB (ex. 5 means level 0~4 exists)
 
 dbIndex = 0 # db index (0: totaldb, 1: trieDB0, 2: trieDB1, ...)
 maxBlockNum = 0 # max block number in the log file
@@ -69,7 +70,7 @@ for line in rdr:
     if len(line) > 1:
         if len(line) == 6:
             # find compaction count log
-            print("find compaction count info")
+            # print("find compaction count info")
             # memComp = int(line[0])
             # level0Comp = int(line[1])
             # nonLevel0Comp = int(line[2])
@@ -84,7 +85,7 @@ for line in rdr:
             increaseDBIndex()
         else:
             # find leveldb info log
-            print("find leveldb info log")
+            # print("find leveldb info log")
             level = int(line[0])
             tables = int(line[1])
             tablesSize = float(line[2])    # MB
@@ -107,14 +108,16 @@ for line in rdr:
     else:
         if line[0] == "leveldbInfo":
             # find "leveldbInfo"
-            print("find leveldbinfo")
+            # print("find leveldbinfo")
+            pass
         else:
             # find "inserted block x --------------------"
-            print("find inserted block")
+            # print("find inserted block")
             blockNum = int(line[0].split(" ")[2])
             maxBlockNum = blockNum
             print("now finished block", blockNum)
-    print()
+            print()
+    
 
 f.close()
 
