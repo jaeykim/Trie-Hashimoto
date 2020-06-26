@@ -62,3 +62,11 @@ func (s StorageSize) Float() float64 {
 func (s StorageSize) Int() int64 {
 	return int64(s.Float())
 }
+
+func (s StorageSize) KB() string {
+	return fmt.Sprintf("%.2f", s/1024)
+}
+
+func (s StorageSize) MB() string {
+	return fmt.Sprintf("%.2f", s/1048576)
+}
