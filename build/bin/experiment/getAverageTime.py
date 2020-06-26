@@ -4,9 +4,11 @@ mpl.use('Agg')
 import matplotlib.pyplot as plt
 
 
-TrieDBNum = 6   # num of leveldb for indexed trie nodes
-LogFilePath = 'impt_data_log.txt'   # impt log file path
-# LogFilePath = 'imptData/impt_data_log_not_indexed_1000.txt' # impt log file path
+TrieDBNum = 1   # num of leveldb for indexed trie nodes
+# LogFilePath = 'impt_data_log.txt'   # impt log file path
+LogFilePath = 'imptData/impt_data_blockNum_indexed_level_logging/impt_data_log.txt' # impt log file path
+# LogFilePath = 'imptData/impt_data_original_geth_level_logging/impt_data_log.txt' # impt log file path
+
 GraphPath = 'collectedData/imptGraph/'  # impt graph image path
 
 # db search times for each block
@@ -126,6 +128,9 @@ for i in range(TrieDBNum):
         avgTime = int(sum(allTrieDBTimes[i])/len(allTrieDBTimes[i]))
         realList = [time for time in allTrieDBTimes[i] if int(time) < outlierCrt*avgTime]
         outlierList = [time for time in allTrieDBTimes[i] if int(time) >= outlierCrt*avgTime]
+        # just to deal with the ZeroDivisionError
+        if len(realList) == 0:
+            realList.append(0)
         print("real average search time in trie db", i, ":\t", int(sum(realList)/len(realList)), "ns", "(", len(realList), "queries /", len(outlierList), "outliers", ")")
         realTrieTimeSum = realTrieTimeSum + sum(realList)
         realTrieTimeCnt = realTrieTimeCnt + len(realList)
@@ -142,6 +147,7 @@ print("real average search time in total db :\t", int(sum(realList)/len(realList
 
 
 # draw graphs
+maxTime = int(10000000*0.6) # to cut out too big value from graph
 print("drawing graphs...")
 for i in range(TrieDBNum):
     if len(trieDBAvgTimes[i]) != 0:
@@ -150,6 +156,11 @@ for i in range(TrieDBNum):
             # if trieDBAvgTimes[i][j] > outlierCrt*realTrieAvgTimes[i]:
             #     del trieDBAvgTimes[i][j]
             #     del trieDBSizes[i][j]
+        
+        # to cut out too big value from graph
+        for j in range(len(trieDBAvgTimes[i])):
+            if trieDBAvgTimes[i][j] > maxTime:
+                trieDBAvgTimes[i][j] = maxTime
 
         # draw graph
         plt.figure()                                        # set new graph
@@ -164,6 +175,11 @@ for i in range(TrieDBNum):
 
 if len(totalDBAvgTimes) != 0:
     # delete outliers
+
+    # to cut out too big value from graph
+    for j in range(len(totalDBAvgTimes)):
+        if totalDBAvgTimes[j] > maxTime:
+            totalDBAvgTimes[j] = maxTime
 
     # draw graph
     plt.figure()
