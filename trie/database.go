@@ -425,7 +425,7 @@ func GetProperDBIndex(hash common.Hash) int {
 	// indexing policy 3: 16 DBs - 0/1/2/3/4/5/6/7/8/9/a/b/c/d/e/f
 	// dbIndex, _ = strconv.ParseInt(index, 16, 8)
 
-	// indexing policy 4: 1 DB
+	// indexing policy 4: 1 DB - 0~f
 	_ = index
 	dbIndex = 0
 
@@ -455,10 +455,16 @@ func (db *Database) node(hash common.Hash) node {
 	// enc, err := db.diskdb.Get(hash[:]) // impt: find indexed trie node in proper trie node db (jmlee)
 	dbIndex := GetProperDBIndex(hash)
 	start1 := time.Now()
-	enc, err := GlobalTrieNodeDB[dbIndex].Get(hash[:])
+	// dont need additional trie db anymore, just set elapsed1 = 0 (jmlee)
+	// enc, err := GlobalTrieNodeDB[dbIndex].Get(hash[:])
 	elapsed1 := time.Since(start1)
+	elapsed1 = 0
+	// if enc == nil {
+	// 	// not found, just logging it as 0
+	// 	elapsed1 = 0
+	// }
 	start2 := time.Now()
-	enc, err = db.diskdb.Get(hash[:])
+	enc, err := db.diskdb.Get(hash[:])
 	elapsed2 := time.Since(start2)
 	// fmt.Println("	%% compare DB search time -> triedb:", elapsed1, "vs totaldb:", elapsed2, "-> reduced time:", elapsed2-elapsed1)
 	// print trie db index & search time for impt data log
@@ -518,10 +524,16 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	// enc, err := db.diskdb.Get(hash[:]) // impt: find indexed trie node in proper trie node db (jmlee) (cf. this Node() function is rarely called)
 	dbIndex := GetProperDBIndex(hash)
 	start1 := time.Now()
-	enc, err := GlobalTrieNodeDB[dbIndex].Get(hash[:])
+	// dont need additional trie db anymore, just set elapsed1 = 0 (jmlee)
+	// enc, err := GlobalTrieNodeDB[dbIndex].Get(hash[:])
 	elapsed1 := time.Since(start1)
+	elapsed1 = 0
+	// if enc == nil {
+	// 	// not found, just logging it as 0
+	// 	elapsed1 = 0
+	// }
 	start2 := time.Now()
-	enc, err = db.diskdb.Get(hash[:])
+	enc, err := db.diskdb.Get(hash[:])
 	elapsed2 := time.Since(start2)
 	// fmt.Println("	%%% compare DB search time -> triedb:", elapsed1, "vs totaldb:", elapsed2, "-> reduced time:", elapsed2-elapsed1)
 
@@ -892,39 +904,39 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	// impt: write indexed trie node to other leveldb (jmlee)
 	// fmt.Println("in commit(), hash ", hash.Hex(), "is Put to batch")
 	
-	if GlobalTrieNodeDB[0] != nil{
+	// if GlobalTrieNodeDB[0] != nil{
 
-		// open the batch of proper db for the indexed trie node
-		dbIndex := GetProperDBIndex(hash)
-		imptBatch := GlobalTrieNodeDB[dbIndex].NewBatch()
-		// fmt.Println("in commit(), node", hash.Hex(), "is in db", dbIndex)
+	// 	// open the batch of proper db for the indexed trie node
+	// 	dbIndex := GetProperDBIndex(hash)
+	// 	imptBatch := GlobalTrieNodeDB[dbIndex].NewBatch()
+	// 	// fmt.Println("in commit(), node", hash.Hex(), "is in db", dbIndex)
 		
-		// fmt.Println("imptBatch Put", hash.Hex())
-		if err := imptBatch.Put(hash[:], node.rlp()); err != nil {
-			fmt.Println("imptBatch Put err")
-			return err
-		}
-		// If we've reached an optimal batch size, commit and start over
-		if imptBatch.ValueSize() >= ethdb.IdealBatchSize {
-			if err := imptBatch.Write(); err != nil {
-				return err
-			}
-			// maybe i dont need this (jmlee)
-			// GlobalTrieNodeDB[dbIndex].lock.Lock()
-			// imptBatch.Replay(uncacher)
-			// imptBatch.Reset()
-			// GlobalTrieNodeDB[dbIndex].lock.Unlock()
-		}
+	// 	// fmt.Println("imptBatch Put", hash.Hex())
+	// 	if err := imptBatch.Put(hash[:], node.rlp()); err != nil {
+	// 		fmt.Println("imptBatch Put err")
+	// 		return err
+	// 	}
+	// 	// If we've reached an optimal batch size, commit and start over
+	// 	if imptBatch.ValueSize() >= ethdb.IdealBatchSize {
+	// 		if err := imptBatch.Write(); err != nil {
+	// 			return err
+	// 		}
+	// 		// maybe i dont need this (jmlee)
+	// 		// GlobalTrieNodeDB[dbIndex].lock.Lock()
+	// 		// imptBatch.Replay(uncacher)
+	// 		// imptBatch.Reset()
+	// 		// GlobalTrieNodeDB[dbIndex].lock.Unlock()
+	// 	}
 
-		// Trie mostly committed to disk, flush any batch leftovers
-		if err := imptBatch.Write(); err != nil {
-			log.Error("Failed to write trie to disk", "err", err)
-			return err
-		}
+	// 	// Trie mostly committed to disk, flush any batch leftovers
+	// 	if err := imptBatch.Write(); err != nil {
+	// 		log.Error("Failed to write trie to disk", "err", err)
+	// 		return err
+	// 	}
 
-	} else {
-		fmt.Println("trie node level db not opened yet, just return")
-	}
+	// } else {
+	// 	fmt.Println("trie node level db not opened yet, just return")
+	// }
 
 	// impt: do not commit indexed trie nodes to total leveldb (jmlee)
 	// just comment out the code below
