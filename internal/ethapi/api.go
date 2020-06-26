@@ -1363,7 +1363,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		addr := crypto.CreateAddress(from, tx.Nonce())
 		log.Info("Submitted contract creation", "fullhash", tx.Hash().Hex(), "contract", addr.Hex())
 	} else {
-		log.Info("Submitted transaction", "fullhash", tx.Hash().Hex(), "recipient", tx.To())
+		// log.Info("Submitted transaction", "fullhash", tx.Hash().Hex(), "recipient", tx.To())
 	}
 	return tx.Hash(), nil
 }
