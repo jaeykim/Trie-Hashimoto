@@ -21,17 +21,16 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"time"
 	"strconv"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/olekukonko/tablewriter"
 	"github.com/ethereum/go-ethereum/trie"
-
+	"github.com/olekukonko/tablewriter"
 )
 
 // GlobalDB is a variable to access leveldb at everywhere (jmlee)
@@ -226,13 +225,13 @@ func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, freezer 
 	fmt.Println("GlobalDB is set")
 
 	// open additional leveldb for indexed trie nodes (jmlee)
-	for i:=0; i<len(trie.GlobalTrieNodeDB); i++{
+	for i := 0; i < len(trie.GlobalTrieNodeDB); i++ {
 		t_namespace := "eth/db/indexedNode/" + strconv.Itoa(i)
-		t_kvdb, err := leveldb.New(file + "/../indexedNodes/index" + strconv.Itoa(i), cache, handles, t_namespace)
+		t_kvdb, err := leveldb.New(file+"/../indexedNodes/index"+strconv.Itoa(i), cache, handles, t_namespace)
 		if err != nil {
 			return nil, err
 		}
-		t_frdb, err := NewDatabaseWithFreezer(t_kvdb, freezer + "/../../indexedNodes/index" + strconv.Itoa(i) + "/ancient", t_namespace)
+		t_frdb, err := NewDatabaseWithFreezer(t_kvdb, freezer+"/../../indexedNodes/index"+strconv.Itoa(i)+"/ancient", t_namespace)
 		if err != nil {
 			t_kvdb.Close()
 			return nil, err
@@ -376,4 +375,164 @@ func InspectDatabase(db ethdb.Database) error {
 		log.Error("Database contains unaccounted data", "size", unaccounted)
 	}
 	return nil
+}
+
+// InspectDatabaseGetResult traverses the entire database and checks the size
+// of all different categories of data, and returns the result as a string
+func InspectDatabaseGetResult(db ethdb.Database) string {
+	it := db.NewIterator()
+	defer it.Release()
+
+	var (
+		count  int64
+		start  = time.Now()
+		logged = time.Now()
+
+		// Key-value store statistics
+		total           common.StorageSize
+		headerSize      common.StorageSize
+		bodySize        common.StorageSize
+		receiptSize     common.StorageSize
+		tdSize          common.StorageSize
+		numHashPairing  common.StorageSize
+		hashNumPairing  common.StorageSize
+		trieSize        common.StorageSize
+		txlookupSize    common.StorageSize
+		preimageSize    common.StorageSize
+		bloomBitsSize   common.StorageSize
+		cliqueSnapsSize common.StorageSize
+
+		// Ancient store statistics
+		ancientHeaders  common.StorageSize
+		ancientBodies   common.StorageSize
+		ancientReceipts common.StorageSize
+		ancientHashes   common.StorageSize
+		ancientTds      common.StorageSize
+
+		// Les statistic
+		chtTrieNodes   common.StorageSize
+		bloomTrieNodes common.StorageSize
+
+		// Meta- and unaccounted data
+		metadata    common.StorageSize
+		unaccounted common.StorageSize
+	)
+	// Inspect key-value database first.
+	for it.Next() {
+		var (
+			key  = it.Key()
+			size = common.StorageSize(len(key) + len(it.Value()))
+		)
+		total += size
+		switch {
+		case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerTDSuffix):
+			tdSize += size
+		case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerHashSuffix):
+			numHashPairing += size
+		case bytes.HasPrefix(key, headerPrefix) && len(key) == (len(headerPrefix)+8+common.HashLength):
+			headerSize += size
+		case bytes.HasPrefix(key, headerNumberPrefix) && len(key) == (len(headerNumberPrefix)+common.HashLength):
+			hashNumPairing += size
+		case bytes.HasPrefix(key, blockBodyPrefix) && len(key) == (len(blockBodyPrefix)+8+common.HashLength):
+			bodySize += size
+		case bytes.HasPrefix(key, blockReceiptsPrefix) && len(key) == (len(blockReceiptsPrefix)+8+common.HashLength):
+			receiptSize += size
+		case bytes.HasPrefix(key, txLookupPrefix) && len(key) == (len(txLookupPrefix)+common.HashLength):
+			txlookupSize += size
+		case bytes.HasPrefix(key, preimagePrefix) && len(key) == (len(preimagePrefix)+common.HashLength):
+			preimageSize += size
+		case bytes.HasPrefix(key, bloomBitsPrefix) && len(key) == (len(bloomBitsPrefix)+10+common.HashLength):
+			bloomBitsSize += size
+		case bytes.HasPrefix(key, []byte("clique-")) && len(key) == 7+common.HashLength:
+			cliqueSnapsSize += size
+		case bytes.HasPrefix(key, []byte("cht-")) && len(key) == 4+common.HashLength:
+			chtTrieNodes += size
+		case bytes.HasPrefix(key, []byte("blt-")) && len(key) == 4+common.HashLength:
+			bloomTrieNodes += size
+		case len(key) == common.HashLength:
+			trieSize += size
+		default:
+			var accounted bool
+			for _, meta := range [][]byte{databaseVerisionKey, headHeaderKey, headBlockKey, headFastBlockKey, fastTrieProgressKey} {
+				if bytes.Equal(key, meta) {
+					metadata += size
+					accounted = true
+					break
+				}
+			}
+			if !accounted {
+				unaccounted += size
+			}
+		}
+		count += 1
+		if count%1000 == 0 && time.Since(logged) > 8*time.Second {
+			log.Info("Inspecting database", "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+			logged = time.Now()
+		}
+	}
+	// Inspect append-only file store then.
+	ancients := []*common.StorageSize{&ancientHeaders, &ancientBodies, &ancientReceipts, &ancientHashes, &ancientTds}
+	for i, category := range []string{freezerHeaderTable, freezerBodiesTable, freezerReceiptTable, freezerHashTable, freezerDifficultyTable} {
+		if size, err := db.AncientSize(category); err == nil {
+			*ancients[i] += common.StorageSize(size)
+			total += common.StorageSize(size)
+		}
+	}
+	// Display the database statistic.
+	stats := [][]string{
+		{"Key-Value store", "Headers", headerSize.String()},
+		{"Key-Value store", "Bodies", bodySize.String()},
+		{"Key-Value store", "Receipts", receiptSize.String()},
+		{"Key-Value store", "Difficulties", tdSize.String()},
+		{"Key-Value store", "Block number->hash", numHashPairing.String()},
+		{"Key-Value store", "Block hash->number", hashNumPairing.String()},
+		{"Key-Value store", "Transaction index", txlookupSize.String()},
+		{"Key-Value store", "Bloombit index", bloomBitsSize.String()},
+		{"Key-Value store", "Trie nodes", trieSize.String()},
+		{"Key-Value store", "Trie preimages", preimageSize.String()},
+		{"Key-Value store", "Clique snapshots", cliqueSnapsSize.String()},
+		{"Key-Value store", "Singleton metadata", metadata.String()},
+		{"Ancient store", "Headers", ancientHeaders.String()},
+		{"Ancient store", "Bodies", ancientBodies.String()},
+		{"Ancient store", "Receipts", ancientReceipts.String()},
+		{"Ancient store", "Difficulties", ancientTds.String()},
+		{"Ancient store", "Block number->hash", ancientHashes.String()},
+		{"Light client", "CHT trie nodes", chtTrieNodes.String()},
+		{"Light client", "Bloom trie nodes", bloomTrieNodes.String()},
+	}
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Database", "Category", "Size"})
+	table.SetFooter([]string{"", "Total", total.String()})
+	table.AppendBulk(stats)
+	table.Render()
+
+	if unaccounted > 0 {
+		log.Error("Database contains unaccounted data", "size", unaccounted)
+	}
+
+	// collect all sizes to log (jmlee)
+	result := ""
+	result += headerSize.KB() + ","
+	result += bodySize.KB() + ","
+	result += receiptSize.KB() + ","
+	result += tdSize.KB() + ","
+	result += numHashPairing.KB() + ","
+	result += hashNumPairing.KB() + ","
+	result += txlookupSize.KB() + ","
+	result += bloomBitsSize.KB() + ","
+	result += trieSize.KB() + ","
+	result += preimageSize.KB() + ","
+	result += cliqueSnapsSize.KB() + ","
+	result += metadata.KB() + ","
+	result += ancientHeaders.KB() + ","
+	result += ancientBodies.KB() + ","
+	result += ancientReceipts.KB() + ","
+	result += ancientTds.KB() + ","
+	result += ancientHashes.KB() + ","
+	result += chtTrieNodes.KB() + ","
+	result += bloomTrieNodes.KB() + ","
+	result += total.KB() + ","
+	result += unaccounted.KB() + ","
+
+	return result
 }
