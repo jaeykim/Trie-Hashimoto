@@ -28,6 +28,8 @@ import (
 	"runtime"
 	"sync"
 	"time"
+	impt_log "log"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -41,6 +43,7 @@ import (
 const (
 	// staleThreshold is the maximum depth of the acceptable stale but valid ethash solution.
 	staleThreshold = 7
+	loggingPeriod = 10
 )
 
 var (
@@ -154,6 +157,8 @@ func (ethash *Ethash) mine(block *types.Block, state *state.StateDB, id int, see
 		minedIMPT = false	// Start PoW after IMPT mining
 		trieHash common.Hash
 		trieNonces []*impt.TrieNonce
+		startTime time.Time
+		elapsedTime time.Duration
 	)
 	logger := log.New("miner", id)
 	logger.Trace("Started ethash search for new nonces", "seed", seed)
@@ -170,6 +175,7 @@ search:
 			if (!minedIMPT) {
 				// Do IMPT mining
 				// HashWithNonce actually does mining work for trie nodes
+				startTime = time.Now()
 				trie := state.Trie()
 				trieHash, trieNonces = (*trie).HashWithNonce(number)
 				
@@ -178,6 +184,7 @@ search:
 				header = block.Header()
 				hash = ethash.SealHash(header).Bytes()
 
+				elapsedTime = time.Since(startTime)
 				minedIMPT = true
 			}
 
@@ -199,6 +206,18 @@ search:
 				select {
 				// Include IMPT mining result in the sealed block body
 				case found <- block.WithSeal(header).WithBody(block.Transactions(), block.Uncles(), trieNonces):
+					
+					if header.Number.Uint64() % loggingPeriod == 0 {
+						fpLog, err := os.OpenFile("./experiment/impt.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+						if err != nil {
+							panic(err)
+						}
+						defer fpLog.Close()
+
+						impt_log.SetOutput(fpLog)
+						impt_log.Println("Block #:", header.Number.Uint64(), ", # of indexed nodes:", len(trieNonces), ", elapsed time:", elapsedTime.Seconds())
+					}
+
 					logger.Trace("Ethash nonce found and reported", "attempts", nonce-seed, "nonce", nonce)
 				case <-abort:
 					logger.Trace("Ethash nonce found but discarded", "attempts", nonce-seed, "nonce", nonce)
