@@ -9,9 +9,13 @@ package leveldb
 import (
 	"fmt"
 	"sort"
+	"os"
+	"strconv"
 
 	"github.com/syndtr/goleveldb/leveldb/storage"
 )
+
+var LogFilePath = "/home/jmlee/go/src/github.com/ethereum/go-ethereum/build/bin/experiment/impt_which_level.txt"
 
 func shorten(str string) string {
 	if len(str) <= 8 {
@@ -95,4 +99,17 @@ func ensureBuffer(b []byte, n int) []byte {
 		return make([]byte, n)
 	}
 	return b[:n]
+}
+
+// logLevelInfo logs which level the value is found at (jmlee)
+func logLevelInfo(level int) {
+	// append or write logData to file
+	f, err := os.OpenFile(LogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Println("ERR:", err)
+		// log.Info("ERR", "err", err)
+	}
+	logData := "find the value at " + strconv.Itoa(level)
+	fmt.Fprintln(f, logData)
+	f.Close()
 }

@@ -38,6 +38,15 @@ type DB struct {
 	inWritePaused          int32 // The indicator whether write operation is paused by compaction
 	aliveSnaps, aliveIters int32
 
+	// Compaction statistic
+	memComp       uint32 // The cumulative number of memory compaction
+	level0Comp    uint32 // The cumulative number of level0 compaction
+	nonLevel0Comp uint32 // The cumulative number of non-level0 compaction
+	seekComp      uint32 // The cumulative number of seek compaction
+
+	// move statistic (jmlee)
+	moveComp	uint32	// the cumulative number of move compaction
+
 	// Session.
 	s *session
 
@@ -757,12 +766,18 @@ func memGet(mdb *memdb.DB, ikey internalKey, icmp *iComparer) (ok bool, mv []byt
 func (db *DB) get(auxm *memdb.DB, auxt tFiles, key []byte, seq uint64, ro *opt.ReadOptions) (value []byte, err error) {
 	ikey := makeInternalKey(nil, key, seq, keyTypeSeek)
 
+	// Get() 함수에서 auxm = nil로 들어오기에 여긴 무시 (jmlee)
 	if auxm != nil {
 		if ok, mv, me := memGet(auxm, ikey, db.s.icmp); ok {
 			return append([]byte{}, mv...), me
 		}
 	}
 
+	// getMems() 함수가 모든 memory db를 가져오는건데 (jmlee)
+	// 이게 leveldb 구조를 보면 memtable에 먼저 들어오고 이후 immutable memtable로 옮겨진 후에 (둘 다 memory에 위치)
+	// dump를 통해 memory에서 disk로, 즉 immutable memtable에서 level0로 들어가게 됨
+	// 이후 compaction을 통해 level0에서 더 높은 레벨로 들어가게 됨
+	// 이 코드는 아마 memtable, immutable memtable 을 가져와서 (em, fm) 거기서 먼저 찾아보는 코드인거 같음
 	em, fm := db.getMems()
 	for _, m := range [...]*memDB{em, fm} {
 		if m == nil {
@@ -771,10 +786,16 @@ func (db *DB) get(auxm *memdb.DB, auxt tFiles, key []byte, seq uint64, ro *opt.R
 		defer m.decref()
 
 		if ok, mv, me := memGet(m.DB, ikey, db.s.icmp); ok {
+			// fmt.Println("@@@ FIND THE VALUE!: at memory")
+			logLevelInfo(-1) // -1 means memorydb
 			return append([]byte{}, mv...), me
 		}
 	}
 
+	// 자 위에서는 memory 영역에서 찾아보는 거였고 거기 없으면 일로 오게 되는데 (jmlee)
+	// db.s는 session type인데 찾아보면 session represent a persistent database session 라고 함
+	// 여기가 아마 disk에서 찾아보라는 내용인거 같음
+	// v.get()을 통해서 disk에서 찾아오게 되는거 같음
 	v := db.s.version()
 	value, cSched, err := v.get(auxt, ikey, ro, false)
 	v.release()
@@ -834,6 +855,7 @@ func (db *DB) has(auxm *memdb.DB, auxt tFiles, key []byte, seq uint64, ro *opt.R
 // The returned slice is its own copy, it is safe to modify the contents
 // of the returned slice.
 // It is safe to modify the contents of the argument after Get returns.
+// trie node 찾을 때는 ro = nil로 넘어오니까 무시해도 됨 (jmlee)
 func (db *DB) Get(key []byte, ro *opt.ReadOptions) (value []byte, err error) {
 	err = db.ok()
 	if err != nil {
@@ -978,6 +1000,8 @@ func (db *DB) GetProperty(name string) (value string, err error) {
 		value += fmt.Sprintf(" Total | %10d | %13.5f | %13.5f | %13.5f | %13.5f\n",
 			totalTables, float64(totalSize)/1048576.0, totalDuration.Seconds(),
 			float64(totalRead)/1048576.0, float64(totalWrite)/1048576.0)
+	case p == "compcount":
+		value = fmt.Sprintf("MemComp:%d Level0Comp:%d NonLevel0Comp:%d SeekComp:%d", atomic.LoadUint32(&db.memComp), atomic.LoadUint32(&db.level0Comp), atomic.LoadUint32(&db.nonLevel0Comp), atomic.LoadUint32(&db.seekComp))
 	case p == "iostats":
 		value = fmt.Sprintf("Read(MB):%.5f Write(MB):%.5f",
 			float64(db.s.stor.reads())/1048576.0,
@@ -1007,6 +1031,26 @@ func (db *DB) GetProperty(name string) (value string, err error) {
 		value = fmt.Sprintf("%d", atomic.LoadInt32(&db.aliveSnaps))
 	case p == "aliveiters":
 		value = fmt.Sprintf("%d", atomic.LoadInt32(&db.aliveIters))
+	case p == "impt":	// stats for impt (jmlee)
+		var totalTables int
+		var totalSize, totalRead, totalWrite int64
+		var totalDuration time.Duration
+		value = ""
+		for level, tables := range v.levels {
+			duration, read, write := db.compStats.getStat(level)
+			if len(tables) == 0 && duration == 0 {
+				continue
+			}
+			totalTables += len(tables)
+			totalSize += tables.size()
+			totalRead += read
+			totalWrite += write
+			totalDuration += duration
+			value += fmt.Sprintf("%1d,%1d,%1.5f,%1.5f,%1.5f,%1.5f,\n",
+				level, len(tables), float64(tables.size())/1048576.0, duration.Seconds(),
+				float64(read)/1048576.0, float64(write)/1048576.0)
+		}
+		value += fmt.Sprintf("%d,%d,%d,%d,%d,\n", atomic.LoadUint32(&db.memComp), atomic.LoadUint32(&db.level0Comp), atomic.LoadUint32(&db.nonLevel0Comp), atomic.LoadUint32(&db.seekComp), atomic.LoadUint32(&db.moveComp))
 	default:
 		err = ErrNotFound
 	}
@@ -1034,6 +1078,11 @@ type DBStats struct {
 	LevelRead         Sizes
 	LevelWrite        Sizes
 	LevelDurations    []time.Duration
+
+	MemComp       uint32
+	Level0Comp    uint32
+	NonLevel0Comp uint32
+	SeekComp      uint32
 }
 
 // Stats populates s with database statistics.
@@ -1070,16 +1119,17 @@ func (db *DB) Stats(s *DBStats) error {
 
 	for level, tables := range v.levels {
 		duration, read, write := db.compStats.getStat(level)
-		if len(tables) == 0 && duration == 0 {
-			continue
-		}
+
 		s.LevelDurations = append(s.LevelDurations, duration)
 		s.LevelRead = append(s.LevelRead, read)
 		s.LevelWrite = append(s.LevelWrite, write)
 		s.LevelSizes = append(s.LevelSizes, tables.size())
 		s.LevelTablesCounts = append(s.LevelTablesCounts, len(tables))
 	}
-
+	s.MemComp = atomic.LoadUint32(&db.memComp)
+	s.Level0Comp = atomic.LoadUint32(&db.level0Comp)
+	s.NonLevel0Comp = atomic.LoadUint32(&db.nonLevel0Comp)
+	s.SeekComp = atomic.LoadUint32(&db.seekComp)
 	return nil
 }
 

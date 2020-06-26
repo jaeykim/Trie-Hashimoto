@@ -26,6 +26,10 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"strings"
+	"os/exec"
+	"strconv"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -43,6 +47,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
+
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var (
@@ -282,6 +288,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 	// Take ownership of this particular state
 	go bc.update()
+
+	// set NextBlockNumber to prefixing impt trie nodes hash (jmlee)
+	common.NextBlockNumber = bc.CurrentBlock().Header().Number.Uint64() + 1
+
 	return bc, nil
 }
 
@@ -623,9 +633,127 @@ func (bc *BlockChain) insert(block *types.Block) {
 	}
 
 	// print database inspecting result per size check epoch
-	if block.Number().Uint64()%common.InspectingDatabaseEpoch == 0 {
-		rawdb.InspectDatabase(rawdb.GlobalDB)
+	// if block.Number().Uint64()%common.InspectingDatabaseEpoch == 0 {
+	// 	rawdb.InspectDatabase(rawdb.GlobalDB)
+	// }
+
+	// print blocknum & leveldbs size for impt data log
+	dbPath := "/home/jmlee/data/impt/db_full/geth/"
+	logData := ""
+	// fmt.Println("block", bc.CurrentBlock().Header().Number, "is inseted")
+	logData += bc.CurrentBlock().Header().Number.String() + ","
+	for i:=0; i<len(trie.GlobalTrieNodeDB); i++{
+		sizeCmd := exec.Command("du", "-sk", dbPath + "indexedNodes/index"+strconv.Itoa(i))
+		sizeCmdOutput, err := sizeCmd.Output()
+		sizeKB := ""
+		if err != nil {
+			// panic(err)
+			// if fail to cmd du -sk, just write db size = 0
+			sizeKB = "0"
+		} else{
+			output:= strings.Split(string(sizeCmdOutput), "	")
+			sizeKB = output[0]
+		}
+		// fmt.Println("trie db", i, "size (KB):", sizeKB)
+		logData += sizeKB + ","
 	}
+	sizeCmd := exec.Command("du", "-sk", dbPath + "chaindata")
+	sizeCmdOutput, err := sizeCmd.Output()
+	sizeKB := ""
+	if err != nil {
+		// panic(err)
+		sizeKB = "0"
+	} else {
+		output:= strings.Split(string(sizeCmdOutput), "	")
+		sizeKB = output[0]
+	}
+	// fmt.Println("total db size (KB):", sizeKB)
+	logData += sizeKB + ","
+	// fmt.Println("logData:", logData)
+	logData += "@\n"
+	// fmt.Println(logData)
+
+	// append or write logData to file
+	f, err := os.OpenFile(trie.ImptLogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Info("ERR", "err", err)
+	}
+	fmt.Fprintln(f, logData)
+	f.Close()
+
+	// increase NextBlockNumber (to prefixing impt trie node hash) (jmlee)
+	common.NextBlockNumber++
+
+
+
+	// inspect leveldb stats
+	f, err = os.OpenFile("/home/jmlee/go/src/github.com/ethereum/go-ethereum/build/bin/experiment/impt_leveldb_compaction_log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Info("ERR", "err", err)
+	}
+	logData = "leveldbInfo\n"	// lists with -> level,tables,size(MB),time(sec),read(MB),write(MB)
+	
+	// log for total db
+	totalDBStat, _ := bc.db.Stat("leveldb.impt")
+	logData += totalDBStat + "\n"
+	// fmt.Println("totalDBStat\n", totalDBStat)
+
+	// log for trie node db
+	// trieDBStat, _ := trie.GlobalTrieNodeDB[0].Stat("leveldb.impt")
+	// logData += trieDBStat + "\n"
+	// fmt.Println(trieDBStat)
+
+	logData += "inserted block " + bc.CurrentBlock().Header().Number.String() + " ------------------------------\n"
+	fmt.Fprintln(f, logData)
+	f.Close()
+
+
+
+	// log for which level info
+	f, err = os.OpenFile(leveldb.LogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Info("ERR", "err", err)
+	}
+	logData = "inserted block " + bc.CurrentBlock().Header().Number.String() + "\n"
+	fmt.Fprintln(f, logData)
+	f.Close()
+	
+
+
+	// print state trie (jmlee)
+	// fmt.Println("$$$ print state trie at block", bc.CurrentBlock().Header().Number)
+	// ldb := trie.NewDatabase(bc.db)
+	// stateTrie, _ := trie.New(bc.CurrentBlock().Root(), ldb)
+	// _ = stateTrie
+	// stateTrie.Print()
+
+	// print GlobalTrieNodeDB (leveldb for trie node data) (jmlee)
+	// for i:=0; i<len(trie.GlobalTrieNodeDB); i++{
+	// 	// if i < 2 || i == 4 {
+	// 	// 	continue
+	// 	// }
+	// 	fmt.Println("$$$ print trie.GlobalTrieNodeDB[",i,"]")
+	// 	it := trie.GlobalTrieNodeDB[i].NewIterator()
+	// 	for it.Next(){
+	// 		fmt.Println("	node hash:", common.BytesToHash(it.Key()).Hex())
+	// 		// fmt.Println("	key: ", it.Key())
+	// 		// fmt.Println("	value: ", it.Value())
+	// 		// fmt.Println()
+	// 	}
+	// 	fmt.Println()
+	// }
+
+	// print entire leveldb (jmlee)
+	// fmt.Println("$$$ print entire leveldb")
+	// it := bc.db.NewIterator()
+	// for it.Next(){
+	// 	fmt.Println("	node hash:", common.BytesToHash(it.Key()).Hex())
+	// 	// fmt.Println("	key: ", it.Key())
+	// 	// fmt.Println("	value: ", it.Value())
+	// 	// fmt.Println()
+	// }
+
+
 }
 
 // Genesis retrieves the chain's genesis block.

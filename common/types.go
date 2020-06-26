@@ -43,6 +43,9 @@ const (
 var (
 	hashT    = reflect.TypeOf(Hash{})
 	addressT = reflect.TypeOf(Address{})
+
+	// blockNumber to set impt trie node prefixing (jmlee)
+	NextBlockNumber = uint64(1)
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.

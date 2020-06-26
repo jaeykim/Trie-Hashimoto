@@ -4,8 +4,10 @@ import (
 	"crypto/rand"
 	//"encoding/hex"
 	"fmt"
-	_ "os"
-	_ "strconv"
+	"os"
+	"strconv"
+	"os/exec"
+	"strings"
 
 	"reflect"
 	"os"
@@ -16,6 +18,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	// "github.com/ethereum/go-ethereum/ethdb/leveldb"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	// "github.com/ethereum/go-ethereum/ethdb"
+	
 )
 
 func randomHex() []byte {
@@ -25,6 +31,7 @@ func randomHex() []byte {
 	}
 	return bytes
 }
+
 
 func main() {
 	sizeCheckEpoch := 5
@@ -36,6 +43,43 @@ func main() {
 	defer file.Close()
 	fmt.Println(reflect.TypeOf(file))
 
+
+	sizeCmd := exec.Command("du", "-sk", "/home/jmlee/data/impt/db_full/geth/indexedNodes")
+	// sizeCmd := exec.Command("ls", "./index")
+	sizeCmdOutput, err := sizeCmd.Output()
+	output:= strings.Split(string(sizeCmdOutput), "	")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("> size of db")
+	fmt.Println(output)
+	for i:=0;i<len(output);i++{
+		fmt.Println(i)
+		fmt.Println(output[i])
+	}
+	// fmt.Println(output[1])
+	// fmt.Println(output[2])
+
+	return 
+
+
+
+
+
+	const arrlen = 5
+	arrlenstr := strconv.Itoa(arrlen)
+	hexstr := "0123456789abcdef"
+	for i:=0;i<len(hexstr);i++{
+		char := string(hexstr[i])
+		if char <arrlenstr{
+			fmt.Println("char", char, "is smaller than", arrlenstr)
+		} else {
+			fmt.Println("char", char, "is bigger than", arrlenstr)
+		}
+	}
+
+
+	os.RemoveAll("./index")
 
 	// make trie
 	//normTrie := trie.NewEmpty()
@@ -139,3 +183,4 @@ func main() {
 
 	
 }
+

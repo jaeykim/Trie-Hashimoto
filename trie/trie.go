@@ -456,6 +456,10 @@ func (t *Trie) hashRoot(db *Database, onleaf LeafCallback, trieNonces *[]*impt.T
 	return h.hash(t.root, db, true, trieNonces, isMining, blockNum)
 }
 
+func (t *Trie) DB() *Database{
+	return t.db
+}
+
 func (t *Trie) Size() common.StorageSize {
 	size, _ := t.db.Size()
 	return size

@@ -171,3 +171,37 @@ func prefixLen(a, b []byte) int {
 func hasTerm(s []byte) bool {
 	return len(s) > 0 && s[len(s)-1] == 16
 }
+
+// compactToHashPrefix returns the hash prefix we want to find (sjkim)
+func compactToHashPrefix (compact []byte) []byte {
+	//return nil // do not mining (sjkim)
+	fixedLength := 2
+	terminator := byte(0)
+	if compact[0] >> 5 == 1 {
+	   terminator = byte(1)
+	   //compact = compact[:len(compact)-1] // fast mining for leaf node 
+	}
+	if compact[0] & byte(0x10) == 0x10 {
+	   length := len(compact)
+	   if length > 4 { length = 4; }
+	   if len(compact) > fixedLength { compact = compact[:fixedLength]; }
+	   buf := make([]byte, fixedLength)
+	   copy(buf, compact)
+	   buf[0] &= byte(0x0f)
+	   buf[0] |= byte(2*length-1) << 4
+	   buf[0] |= terminator << 7
+	   return buf
+	} else if compact[0] & byte(0x10) == 0x00 {
+	   length := len(compact)
+	   if length > 4 { length = 4; }
+	   if len(compact) > fixedLength { compact = compact[:fixedLength]; }
+	   buf := make([]byte, fixedLength)
+	   copy(buf, compact)
+	   buf[0] &= byte(0x0f)
+	   buf[0] |= byte(2*length-2) << 4
+	   buf[0] |= terminator << 7
+	   return buf
+	} else {
+	   panic("compactToHashPresix error")
+	}
+ }
