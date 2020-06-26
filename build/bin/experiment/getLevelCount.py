@@ -3,6 +3,9 @@ import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 
+import time
+import math
+import numpy as np
 
 LogFilePath = 'imptData/impt_data_blockNum_indexed_level_logging/impt_which_level.txt' # impt log file path
 # LogFilePath = 'imptData/impt_data_original_geth_level_logging/impt_which_level.txt' # impt log file path
@@ -14,8 +17,9 @@ MAXBLOCKNUM = 800000 + 1    # max num of block (ex. 800000 + 1 means block 0 ~ 8
 
 # make empty 2d list -> list[b][a]
 def TwoD(a, b): 
-    lst = [[0 for col in range(a)] for col in range(b)]
-    return lst
+    # lst = [[0 for col in range(a)] for col in range(b)]
+    # return lst
+    return np.zeros(a * b, dtype=int).reshape(b, a)
 
 # levelCount[level][blockNum] = # of the level searched count at block blockNum
 levelCount = TwoD(MAXBLOCKNUM, MAXLEVEL)
@@ -52,6 +56,7 @@ for line in rdr:
             break
         print()
 
+    # code for debugging
     # cnt = cnt + 1
     # if cnt == 100:
     #     break
@@ -68,7 +73,7 @@ for level in range(MAXLEVEL):
     if level == MAXLEVEL-1:
         plt.title('search count for memory db', pad=10)
     plt.xlabel('Block Number', labelpad=10)                 # set x axis
-    plt.ylabel('Count', labelpad=10)                        # set y axis
+    plt.ylabel('Count per Block', labelpad=10)              # set y axis
 
     blockNums = list(range(0, MAXBLOCKNUM))
     # plt.scatter(blockNums, levelCount[level], s=1)          # draw scatter graph
@@ -79,6 +84,41 @@ for level in range(MAXLEVEL):
     if level == MAXLEVEL-1:
         graphName = "searchCount_MemoryDB"
     plt.savefig(GraphPath+graphName)
+
+
+
+print("drawing total stack graphs...")
+plt.figure()    # set new graph
+plt.title('total stack search count', pad=10) # set graph title
+plt.xlabel('Block Number', labelpad=10)                 # set x axis
+plt.ylabel('Count per Block', labelpad=10)                        # set y axis
+blockNums = list(range(0, MAXBLOCKNUM))
+
+colors = ['red', 'black', 'blue', 'brown', 'green', 'cyan', 'magenta']
+colors = colors[:MAXLEVEL]
+
+# logscale elements
+levelCountCopy = np.where(levelCount == 0, 1, levelCount)
+levelCountCopy = np.log10(np.array(levelCountCopy)).tolist()
+
+for i in range(len(colors)):
+
+    label = "level " + str(i)
+    if i == MAXLEVEL-1:
+        label = "memory db"
+    else:
+        levelCountCopy[i+1] = [sum(x) for x in zip(levelCountCopy[i], levelCountCopy[i+1])]
+    plt.plot(blockNums, levelCountCopy[i], color=colors[i], label=label)
+    # if i == 0:
+    #     plt.fill_between(blockNums, levelCountCopy[i], 0, color=colors[i])
+    # else:
+    #     plt.fill_between(blockNums, levelCountCopy[i], levelCountCopy[i-1], color=colors[i])
+
+plt.legend(loc='best')
+
+# save graph
+graphName = "stackSearchCount_total"
+plt.savefig(GraphPath+graphName)
 
 
 
@@ -106,6 +146,7 @@ for level in range(MAXLEVEL):
     plt.savefig(GraphPath+graphName)
 
 
+
 print("drawing total accumulative graphs...")
 plt.figure()    # set new graph
 plt.title('total accumulative search count', pad=10) # set graph title
@@ -125,6 +166,37 @@ plt.legend(loc='best')
 # save graph
 graphName = "accumulativeSearchCount_total"
 plt.savefig(GraphPath+graphName)
+
+
+
+print("drawing total stack accumulative graphs...")
+plt.figure()    # set new graph
+plt.title('total stack accumulative search count', pad=10) # set graph title
+plt.xlabel('Block Number', labelpad=10)                 # set x axis
+plt.ylabel('Count', labelpad=10)                        # set y axis
+blockNums = list(range(0, MAXBLOCKNUM))
+
+colors = ['red', 'black', 'blue', 'brown', 'green', 'cyan', 'magenta']
+colors = colors[:MAXLEVEL]
+for i in range(len(colors)):
+    label = "level " + str(i)
+    if i == MAXLEVEL-1:
+        label = "memory db"
+    else:
+        levelCount[i+1] = [sum(x) for x in zip(levelCount[i], levelCount[i+1])]
+    plt.plot(blockNums, levelCount[i], color=colors[i], label=label)
+    if i == 0:
+        plt.fill_between(blockNums, levelCount[i], 0, color=colors[i])
+    else:
+        plt.fill_between(blockNums, levelCount[i], levelCount[i-1], color=colors[i])
+
+plt.legend(loc='best')
+
+# save graph
+graphName = "stackAccumulativeSearchCount_total"
+plt.savefig(GraphPath+graphName)
+
+
 
 print("final result")
 totalSearchCount = 0
