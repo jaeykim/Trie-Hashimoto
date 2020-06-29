@@ -46,7 +46,7 @@ type keccakState interface {
 type sliceBuffer []byte
 
 var fakeIMPT bool = true
-var prefixLength int = 3
+var prefixLength int = 2
 
 func (b *sliceBuffer) Write(data []byte) (n int, err error) {
 	*b = append(*b, data...)
@@ -86,7 +86,7 @@ func (h *hasher) hash(n node, db *Database, force bool, trieNonces *[]*impt.Trie
 		// Returns cached hash directly only when normal Hash() was called.
 		// If HashWithNonce() or HashByNonce() was called, we should update the cached hash,
 		// so ignore the short-circuit condition.
-		if db == nil && trieNonces == nil {
+		if db == nil && (trieNonces == nil || !dirty) {
 			// fmt.Println("hasher.hash() finished 1", "/ hash:", hash.fstring(""), "/ dirty:", dirty)
 			return hash, n, nil
 		}
@@ -199,7 +199,7 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]*impt.Tri
 		return n, 0, nil // Nodes smaller than 32 bytes are stored inside their parent
 	}
 	// Larger nodes are replaced by their hash and stored in the database.
-	hash, _ := n.cache()
+	hash, dirty := n.cache()
 
 	/*
 	switch n.(type) {
@@ -250,7 +250,7 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]*impt.Tri
 			if trieNonces == nil {
 				// Used for normal Hash()
 				if hash == nil { hash = h.makeHashNode(h.tmp); }
-			} else if isMining {
+			} else if isMining && dirty {
 				// Used for HashWithNonce()
 				// Make new hashNode even if hashNode info already exists in cache
 				hash = h.makeHashNode(h.tmp)
@@ -275,7 +275,7 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]*impt.Tri
 				newHash = common.BytesToHash(hash)
 				nonce = n.getNonce()
 				*trieNonces = append(*trieNonces, impt.NewTrieNonce(oldHash, newHash, nonce))
-			} else if !isMining {
+			} else if !isMining && dirty {
 				// Used for HashByNonce()
 				// Make new hashNode even if hashNode info already exists in cache
 				hash = h.makeHashNode(h.tmp)
