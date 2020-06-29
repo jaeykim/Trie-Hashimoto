@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/impt"
+	
 )
 
 var (
@@ -1745,7 +1745,7 @@ func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) (err err
 }
 
 // DeliverBodies injects a new batch of block bodies received from a remote node.
-func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction, uncles [][]*types.Header, trieNonces [][]*impt.TrieNonce) (err error) {
+func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction, uncles [][]*types.Header, trieNonces [][]uint64) (err error) {
 	return d.deliver(id, d.bodyCh, &bodyPack{id, transactions, uncles, trieNonces}, bodyInMeter, bodyDropMeter)
 }
 

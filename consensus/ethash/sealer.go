@@ -37,13 +37,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/impt"
+	
 )
 
 const (
 	// staleThreshold is the maximum depth of the acceptable stale but valid ethash solution.
 	staleThreshold = 7
 	loggingPeriod = 10
+	isLogging = true
 )
 
 var (
@@ -156,7 +157,7 @@ func (ethash *Ethash) mine(block *types.Block, state *state.StateDB, id int, see
 		nonce    = seed
 		minedIMPT = false	// Start PoW after IMPT mining
 		trieHash common.Hash
-		trieNonces []*impt.TrieNonce
+		trieNonces []uint64
 		startTime time.Time
 		elapsedTime time.Duration
 	)
@@ -207,8 +208,8 @@ search:
 				// Include IMPT mining result in the sealed block body
 				case found <- block.WithSeal(header).WithBody(block.Transactions(), block.Uncles(), trieNonces):
 					
-					if header.Number.Uint64() % loggingPeriod == 0 {
-						fpLog, err := os.OpenFile("./experiment/impt.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+					if isLogging && (header.Number.Uint64() % loggingPeriod == 0) {
+						fpLog, err := os.OpenFile("./experiment/impt_sealer.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 						if err != nil {
 							panic(err)
 						}

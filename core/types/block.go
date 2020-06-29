@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
-	"github.com/ethereum/go-ethereum/impt"
 )
 
 var (
@@ -143,7 +142,7 @@ func rlpHash(x interface{}) (h common.Hash) {
 type Body struct {
 	Transactions []*Transaction
 	Uncles       []*Header
-	TrieNonces	 []*impt.TrieNonce
+	TrieNonces	 []uint64
 }
 
 // Block represents an entire block in the Ethereum blockchain.
@@ -151,7 +150,7 @@ type Block struct {
 	header       *Header
 	uncles       []*Header
 	transactions Transactions
-	trieNonces	 []*impt.TrieNonce // (sjkim)
+	trieNonces	 []uint64 // (sjkim)
 
 	// caches
 	hash atomic.Value
@@ -185,7 +184,7 @@ type extblock struct {
 	Header *Header
 	Txs    []*Transaction
 	Uncles []*Header
-	TrieNonces []*impt.TrieNonce
+	TrieNonces []uint64
 }
 
 // [deprecated by eth/63]
@@ -204,7 +203,7 @@ type storageblock struct {
 // The values of TxHash, UncleHash, ReceiptHash and Bloom in header
 // are ignored and set to values derived from the given txs, uncles
 // and receipts.
-func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt, trieNonces []*impt.TrieNonce) *Block {
+func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt) *Block {
 	b := &Block{header: CopyHeader(header), td: new(big.Int)}
 
 	// TODO: panic if len(txs) != len(receipts)
@@ -233,16 +232,6 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 		}
 	}
 
-	//b.trieNonces = make([]*impt.TrieNonce, 0)
-	/*
-	if len(trieNonces) == 0 {
-		//b.header.TxHash = EmptyRootHash
-	} else {
-		//b.header.TxHash = DeriveSha(Transactions(txs))
-		b.trieNonces = make([]*impt.TrieNonce, len(trieNonces))
-		copy(b.trieNonces, trieNonces)
-	}
-	*/
 	return b
 }
 
@@ -306,7 +295,7 @@ func (b *StorageBlock) DecodeRLP(s *rlp.Stream) error {
 
 func (b *Block) Uncles() []*Header          { return b.uncles }
 func (b *Block) Transactions() Transactions { return b.transactions }
-func (b *Block) TrieNonces() []*impt.TrieNonce { return b.trieNonces }
+func (b *Block) TrieNonces() []uint64 { return b.trieNonces }
 
 func (b *Block) Transaction(hash common.Hash) *Transaction {
 	for _, transaction := range b.transactions {
@@ -386,12 +375,12 @@ func (b *Block) WithSeal(header *Header) *Block {
 }
 
 // WithBody returns a new block with the given transaction and uncle contents.
-func (b *Block) WithBody(transactions []*Transaction, uncles []*Header, trieNonces []*impt.TrieNonce) *Block {
+func (b *Block) WithBody(transactions []*Transaction, uncles []*Header, trieNonces []uint64) *Block {
 	block := &Block{
 		header:       CopyHeader(b.header),
 		transactions: make([]*Transaction, len(transactions)),
 		uncles:       make([]*Header, len(uncles)),
-		trieNonces:   make([]*impt.TrieNonce, len(trieNonces)),
+		trieNonces:   make([]uint64, len(trieNonces)),
 	}
 	copy(block.transactions, transactions)
 	copy(block.trieNonces, trieNonces)
@@ -416,8 +405,8 @@ func (b *Block) ModifyRoot(hash common.Hash) {
 	b.header.Root = hash
 }
 
-func (b *Block) ModifyBody(trieNonces []*impt.TrieNonce) {
-	b.trieNonces = make([]*impt.TrieNonce, len(trieNonces))
+func (b *Block) ModifyBody(trieNonces []uint64) {
+	b.trieNonces = make([]uint64, len(trieNonces))
 	copy(b.trieNonces, trieNonces)
 }
 

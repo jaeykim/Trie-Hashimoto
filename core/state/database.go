@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/impt"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -81,11 +80,11 @@ type Trie interface {
 
 	// HashWithNonce returns the root hash of the trie with the mining work result. 
 	// It does not write to the database and can be used even if the trie doesn't have one.
-	HashWithNonce(uint64) (common.Hash, []*impt.TrieNonce)
+	HashWithNonce(uint64) (common.Hash, []uint64)
 	
 	// HashByNonce returns the root hash of the trie updated by previously mined work.
 	// It does not write to the database and can be used even if the trie doesn't have one.
-	HashByNonce(trieNonces []*impt.TrieNonce, blockNum uint64) common.Hash
+	HashByNonce(trieNonces []uint64, blockNum uint64) common.Hash
 
 	// Commit writes all nodes to the trie's memory database, tracking the internal
 	// and external (for account tries) references.

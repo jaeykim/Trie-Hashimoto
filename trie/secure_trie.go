@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/impt"
 )
 
 // SecureTrie wraps a trie with key hashing. In a secure trie, all
@@ -163,11 +162,11 @@ func (t *SecureTrie) Hash() common.Hash {
 }
 
 
-func (t *SecureTrie) HashWithNonce(blockNum uint64) (common.Hash, []*impt.TrieNonce) {
+func (t *SecureTrie) HashWithNonce(blockNum uint64) (common.Hash, []uint64) {
 	return t.trie.HashWithNonce(blockNum)
 }
 
-func (t *SecureTrie) HashByNonce(trieNonces []*impt.TrieNonce, blockNum uint64) common.Hash {
+func (t *SecureTrie) HashByNonce(trieNonces []uint64, blockNum uint64) common.Hash {
 	return t.trie.HashByNonce(trieNonces, blockNum)
 }
 

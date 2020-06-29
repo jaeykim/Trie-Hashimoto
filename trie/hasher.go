@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/impt"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -80,7 +79,7 @@ func returnHasherToPool(h *hasher) {
 
 // hash collapses a node down into a hash node, also returning a copy of the
 // original node initialized with the computed hash to replace the original one.
-func (h *hasher) hash(n node, db *Database, force bool, trieNonces *[]*impt.TrieNonce, isMining bool, blockNum uint64) (node, node, error) {
+func (h *hasher) hash(n node, db *Database, force bool, trieNonces *[]uint64, isMining bool, blockNum uint64, count *uint64) (node, node, error) {
 	// If we're not storing the node, just hashing, use available cached data
 	if hash, dirty := n.cache(); hash != nil {
 		// Returns cached hash directly only when normal Hash() was called.
@@ -104,12 +103,12 @@ func (h *hasher) hash(n node, db *Database, force bool, trieNonces *[]*impt.Trie
 		}
 	}
 	// Trie not processed yet or needs storage, walk the children
-	collapsed, cached, err := h.hashChildren(n, db, trieNonces, isMining, blockNum)
+	collapsed, cached, err := h.hashChildren(n, db, trieNonces, isMining, blockNum, count)
 	if err != nil {
 		// fmt.Println("hasher.hash() finished 4")
 		return hashNode{}, n, err
 	}
-	hashed, nonce, err := h.store(collapsed, db, force, trieNonces, isMining, blockNum)
+	hashed, nonce, err := h.store(collapsed, db, force, trieNonces, isMining, blockNum, count)
 	if err != nil {
 		// fmt.Println("hasher.hash() finished 5")
 		return hashNode{}, n, err
@@ -142,7 +141,7 @@ func (h *hasher) hash(n node, db *Database, force bool, trieNonces *[]*impt.Trie
 // hashChildren replaces the children of a node with their hashes if the encoded
 // size of the child is larger than a hash, returning the collapsed node as well
 // as a replacement for the original node with the child hashes cached in.
-func (h *hasher) hashChildren(original node, db *Database, trieNonces *[]*impt.TrieNonce, isMining bool, blockNum uint64) (node, node, error) {
+func (h *hasher) hashChildren(original node, db *Database, trieNonces *[]uint64, isMining bool, blockNum uint64, count *uint64) (node, node, error) {
 	var err error
 
 	switch n := original.(type) {
@@ -153,7 +152,7 @@ func (h *hasher) hashChildren(original node, db *Database, trieNonces *[]*impt.T
 		cached.Key = common.CopyBytes(n.Key)
 
 		if _, ok := n.Val.(valueNode); !ok {
-			collapsed.Val, cached.Val, err = h.hash(n.Val, db, false, trieNonces, isMining, blockNum)
+			collapsed.Val, cached.Val, err = h.hash(n.Val, db, false, trieNonces, isMining, blockNum, count)
 			if err != nil {
 				return original, original, err
 			}
@@ -166,7 +165,7 @@ func (h *hasher) hashChildren(original node, db *Database, trieNonces *[]*impt.T
 
 		for i := 0; i < 16; i++ {
 			if n.Children[i] != nil {
-				collapsed.Children[i], cached.Children[i], err = h.hash(n.Children[i], db, false, trieNonces, isMining, blockNum)
+				collapsed.Children[i], cached.Children[i], err = h.hash(n.Children[i], db, false, trieNonces, isMining, blockNum, count)
 				if err != nil {
 					return original, original, err
 				}
@@ -184,7 +183,7 @@ func (h *hasher) hashChildren(original node, db *Database, trieNonces *[]*impt.T
 // store hashes the node n and if we have a storage layer specified, it writes
 // the key/value pair to it and tracks any node->child references as well as any
 // node->external trie references.
-func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]*impt.TrieNonce, isMining bool, blockNum uint64) (node, uint64, error) {
+func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]uint64, isMining bool, blockNum uint64, count *uint64) (node, uint64, error) {
 	// Don't store hashes or empty nodes.
 	if _, isHash := n.(hashNode); n == nil || isHash {
 		//fmt.Println("hasher.store End 1")
@@ -253,10 +252,8 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]*impt.Tri
 			} else if isMining && dirty {
 				// Used for HashWithNonce()
 				// Make new hashNode even if hashNode info already exists in cache
-				hash = h.makeHashNode(h.tmp)
-				oldHash := common.BytesToHash(hash)
-				var newHash common.Hash 
 				if fakeIMPT {
+					hash = h.makeHashNode(h.tmp)
 					hash = modifyHash(n, hash, blockNum)
 				} else {
 					for ; ; nonce++ {
@@ -272,42 +269,30 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]*impt.Tri
 						}
 					}
 				}
-				newHash = common.BytesToHash(hash)
 				nonce = n.getNonce()
-				*trieNonces = append(*trieNonces, impt.NewTrieNonce(oldHash, newHash, nonce))
+				*trieNonces = append(*trieNonces, nonce)
 			} else if !isMining && dirty {
 				// Used for HashByNonce()
 				// Make new hashNode even if hashNode info already exists in cache
-				hash = h.makeHashNode(h.tmp)
-				okay := false
-				oldHash := common.BytesToHash(hash)
-				for _, trieNonce := range *trieNonces {
-					// Update normal MPT node to indexed MPT node
-					// Set nonce and generate new hashNode
-					if oldHash == trieNonce.Before() {
-						if fakeIMPT {
-							hash = modifyHash(n, hash, blockNum)				
-						} else {
-							h.tmp.Reset()
-							nonce = trieNonce.Nonce()
-							n.setNonce(nonce)
-							if err := rlp.Encode(&h.tmp, n); err != nil {
-								panic("encode error: " + err.Error())
-							}
-							hash = h.makeHashNode(h.tmp)
-						}
-						// Panic if it generates different hashNode or the hash is not valid
-						if common.BytesToHash(hash) != trieNonce.After() || !validHashNode(hash, blockNum) {
-							panic("HashByNonce error")
-						}
-						okay = true
-						break
+				// Update normal MPT node to indexed MPT node
+				// Set nonce and generate new hashNode
+				if fakeIMPT {
+					hash = h.makeHashNode(h.tmp)
+					hash = modifyHash(n, hash, blockNum)				
+				} else {
+					h.tmp.Reset()
+					nonce = (*trieNonces)[*count]
+					n.setNonce(nonce)
+					if err := rlp.Encode(&h.tmp, n); err != nil {
+						panic("encode error: " + err.Error())
 					}
+					hash = h.makeHashNode(h.tmp)
+					// Panic if it generates different hashNode or the hash is not valid
+					if !validHashNode(hash, blockNum) {
+						panic("HashByNonce error")
+					}					
 				}
-				// Panic if there are no any matched info for current node
-				if !okay {
-					panic("HashByNonce error")
-				}
+				*count = *count + 1
 			}
 		} 
 	case valueNode:

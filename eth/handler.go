@@ -40,7 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/impt"
+	
 )
 
 const (
@@ -557,7 +557,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// Deliver them all to the downloader for queuing
 		transactions := make([][]*types.Transaction, len(request))
 		uncles := make([][]*types.Header, len(request))
-		trieNonces := make([][]*impt.TrieNonce, len(request))
+		trieNonces := make([][]uint64, len(request))
 
 		for i, body := range request {
 			transactions[i] = body.Transactions

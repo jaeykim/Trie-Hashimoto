@@ -46,7 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/impt"
+	
 
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -230,7 +230,7 @@ func (e *NoRewardEngine) accumulateRewards(config *params.ChainConfig, state *st
 }
 
 func (e *NoRewardEngine) Finalize(chain consensus.ChainReader, header *types.Header, statedb *state.StateDB, txs []*types.Transaction,
-	uncles []*types.Header, trieNonces []*impt.TrieNonce) {
+	uncles []*types.Header, trieNonces []uint64) {
 	if e.rewardsOn {
 		e.inner.Finalize(chain, header, statedb, txs, uncles, trieNonces)
 	} else {
@@ -240,7 +240,7 @@ func (e *NoRewardEngine) Finalize(chain consensus.ChainReader, header *types.Hea
 }
 
 func (e *NoRewardEngine) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, statedb *state.StateDB, txs []*types.Transaction,
-	uncles []*types.Header, receipts []*types.Receipt, trieNonces []*impt.TrieNonce) (*types.Block, error) {
+	uncles []*types.Header, receipts []*types.Receipt, trieNonces []uint64) (*types.Block, error) {
 	if e.rewardsOn {
 		return e.inner.FinalizeAndAssemble(chain, header, statedb, txs, uncles, receipts, trieNonces)
 	} else {
@@ -248,7 +248,7 @@ func (e *NoRewardEngine) FinalizeAndAssemble(chain consensus.ChainReader, header
 		header.Root = statedb.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 		// Header seems complete, assemble into a block and return
-		return types.NewBlock(header, txs, uncles, receipts, trieNonces), nil
+		return types.NewBlock(header, txs, uncles, receipts), nil
 	}
 }
 
@@ -533,7 +533,7 @@ func (api *RetestethAPI) mineBlock() error {
 			}
 		}
 	}
-	block, err := api.engine.FinalizeAndAssemble(api.blockchain, header, statedb, txs, []*types.Header{}, receipts, []*impt.TrieNonce{})
+	block, err := api.engine.FinalizeAndAssemble(api.blockchain, header, statedb, txs, []*types.Header{}, receipts, []uint64{})
 	return api.importBlock(block)
 }
 

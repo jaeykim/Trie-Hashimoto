@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/impt"
+	
 )
 
 const (
@@ -95,7 +95,7 @@ type bodyFilterTask struct {
 	peer         string                 // The source peer of block bodies
 	transactions [][]*types.Transaction // Collection of transactions per block bodies
 	uncles       [][]*types.Header      // Collection of uncles per block bodies
-	trieNonces	 [][]*impt.TrieNonce
+	trieNonces	 [][]uint64
 	time         time.Time              // Arrival time of the blocks' contents
 }
 
@@ -248,7 +248,7 @@ func (f *Fetcher) FilterHeaders(peer string, headers []*types.Header, time time.
 
 // FilterBodies extracts all the block bodies that were explicitly requested by
 // the fetcher, returning those that should be handled differently.
-func (f *Fetcher) FilterBodies(peer string, transactions [][]*types.Transaction, uncles [][]*types.Header, trieNonces [][]*impt.TrieNonce, time time.Time) ([][]*types.Transaction, [][]*types.Header, [][]*impt.TrieNonce) {
+func (f *Fetcher) FilterBodies(peer string, transactions [][]*types.Transaction, uncles [][]*types.Header, trieNonces [][]uint64, time time.Time) ([][]*types.Transaction, [][]*types.Header, [][]uint64) {
 	log.Trace("Filtering bodies", "peer", peer, "txs", len(transactions), "uncles", len(uncles))
 
 	// Send the filter channel to the fetcher

@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/impt"
 )
 
 type revision struct {
@@ -666,7 +665,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 // IntermediateRoot computes the current root hash of the state trie.
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
-func (s *StateDB) IntermediateRootByNonce(deleteEmptyObjects bool, trieNonces []*impt.TrieNonce, blockNum uint64) common.Hash {
+func (s *StateDB) IntermediateRootByNonce(deleteEmptyObjects bool, trieNonces []uint64, blockNum uint64) common.Hash {
 	s.Finalise(deleteEmptyObjects)
 
 	// Track the amount of time wasted on hashing the account trie

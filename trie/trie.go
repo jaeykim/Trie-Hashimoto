@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/impt"
 )
 
 var (
@@ -49,9 +48,6 @@ type LeafCallback func(leaf []byte, parent common.Hash) error
 type Trie struct {
 	db   *Database
 	root node
-	//count	[16]uint64 // (sjkim)
-	//childCount	[17]uint64
-	//nodeCount	[0x10000]uint64
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -417,8 +413,8 @@ func (t *Trie) Hash() common.Hash {
 // HashWithNonce returns the root hash of the indexed MPT and the IMPT mining results.
 // It recursively does mining work for each state trie node and stores the mining results.
 // It does not write to the database and can be used even if the trie doesn't have one.
-func (t *Trie) HashWithNonce(blockNum uint64) (common.Hash, []*impt.TrieNonce) {
-	trieNonces := []*impt.TrieNonce{}
+func (t *Trie) HashWithNonce(blockNum uint64) (common.Hash, []uint64) {
+	trieNonces := []uint64{}
 	hash, cached, _ := t.hashRoot(nil, nil, &trieNonces, true, blockNum)
 	t.root = cached
 	return common.BytesToHash(hash.(hashNode)), trieNonces
@@ -427,7 +423,7 @@ func (t *Trie) HashWithNonce(blockNum uint64) (common.Hash, []*impt.TrieNonce) {
 // HashByNonce returns the root hash of the indexed MPT which node is indexed by the trieNonces field in the block body. 
 // It modifies each state trie node of locals to the indexed one by miner.
 // It does not write to the database and can be used even if the trie doesn't have one.
-func (t *Trie) HashByNonce(trieNonces []*impt.TrieNonce, blockNum uint64) common.Hash {
+func (t *Trie) HashByNonce(trieNonces []uint64, blockNum uint64) common.Hash {
 	hash, cached, _ := t.hashRoot(nil, nil, &trieNonces, false, blockNum)
 	t.root = cached
 	return common.BytesToHash(hash.(hashNode))
@@ -447,13 +443,18 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	return common.BytesToHash(hash.(hashNode)), nil
 }
 
-func (t *Trie) hashRoot(db *Database, onleaf LeafCallback, trieNonces *[]*impt.TrieNonce, isMining bool, blockNum uint64) (node, node, error) {
+func (t *Trie) hashRoot(db *Database, onleaf LeafCallback, trieNonces *[]uint64, isMining bool, blockNum uint64) (node, node, error) {
 	if t.root == nil {
 		return hashNode(emptyRoot.Bytes()), nil, nil
 	}
 	h := newHasher(onleaf)
 	defer returnHasherToPool(h)
-	return h.hash(t.root, db, true, trieNonces, isMining, blockNum)
+	var count = uint64(0)
+	a, b, c := h.hash(t.root, db, true, trieNonces, isMining, blockNum, &count)
+	if trieNonces != nil {
+		fmt.Println(count, len(*trieNonces))
+	}
+	return a, b, c
 }
 
 func (t *Trie) DB() *Database{
@@ -484,138 +485,6 @@ func (t *Trie) Print() {
 	fmt.Println(t.root.infostring("", t.db))
 }
 
-/*
-// PrintNodeNum prints the # of each node type (sjkim)
-func (t *Trie) PrintNodeNum(file *os.File) {
-	for i := 0; i < 16; i++ {
-		t.count[i] = 0
-		t.childCount[i] = 0
-	}
-	t.childCount[16] = 0
-	for i := 0; i < 0x10000; i++ {
-		t.nodeCount[i] = 0
-	}
-
-	wr := csv.NewWriter(bufio.NewWriter(file))
-
-	t.countNodeNum(t.root, nil)
-
-	countStr := []string{}
-
-	for i := 0; i < 16; i++ {
-		countStr = append(countStr, strconv.FormatUint(t.count[i], 10))
-	}
-
-	//wr.Write(countStr)
-	//wr.Flush()
-
-	for i := 0; i < 17; i++ {
-		countStr = append(countStr, strconv.FormatUint(t.childCount[i], 10))
-	}
-
-	var branchCollision [5]uint64
-	var leafCollision [5]uint64
-	
-	for i := 0; i < 0x1000; i++ {
-		if t.nodeCount[i] == 1 {
-			branchCollision[0]++
-		} else if t.nodeCount[i] > 1  && t.nodeCount[i] <= 10 {
-			branchCollision[1]++
-		} else if t.nodeCount[i] > 10 && t.nodeCount[i] <= 100 {
-			branchCollision[2]++
-		} else if t.nodeCount[i] > 100 && t.nodeCount[i] <= 1000 {
-			branchCollision[3]++
-		} else if t.nodeCount[i] > 1000 {
-			branchCollision[4]++
-			fmt.Print(i, " ")
-		} 
-	}
-	
-	for i := 0x1000; i < 0x10000; i++ {
-		if t.nodeCount[i] == 1 {
-			leafCollision[0]++
-		} else if t.nodeCount[i] > 1  && t.nodeCount[i] <= 10 {
-			leafCollision[1]++
-		} else if t.nodeCount[i] > 10 && t.nodeCount[i] <= 100 {
-			leafCollision[2]++
-		} else if t.nodeCount[i] > 100 && t.nodeCount[i] <= 1000 {
-			leafCollision[3]++
-		} else if t.nodeCount[i] > 1000 {
-			leafCollision[4]++
-			//fmt.Print(i, " ")
-		} 
-	}
-
-	for i := 0; i < 5; i++ {
-		countStr = append(countStr, strconv.FormatUint(branchCollision[i], 10))
-	}
-
-	for i := 0; i < 5; i++ {
-		countStr = append(countStr, strconv.FormatUint(leafCollision[i], 10))
-	}
-
-	wr.Write(countStr)
-	wr.Flush()
-
-
-
-}
-
-// (sjkim)
-func (t *Trie) countNodeNum(n node, prefix []byte) {
-	switch n := n.(type) {
-	case *fullNode:
-		t.count[0]++
-		childNum := 0
-		for i, child := range &n.Children {
-			t.countNodeNum(child, append(prefix, byte(i)))
-			if child != nil {
-				childNum++
-			}
-		}
-		t.childCount[childNum]++
-		if n.flags.hash != nil {
-			b := make([]byte, 6, 8)
-			b = append(b, []byte(n.flags.hash[:2])...)
-			var bi [8]byte
-			copy(bi[:], b)
-			//fmt.Println(b, int(binary.BigEndian.Uint64(bi[:])))
-			t.nodeCount[int(binary.BigEndian.Uint64(bi[:]))]++
-		}
-
-		//t.nodeCount[binary.BigEndian.Uint64(b)]++
-	case *shortNode:
-		//hashPrefix := hexToHashPrefix(n.Key)
-		//t.count[hashPrefix[0]>>4]++
-		if n.Key[len(n.Key)-1] != 16 && len(n.Key) < 16 {
-			t.count[len(n.Key)]++
-		} else {
-			t.count[15]++
-		}
-		t.countNodeNum(n.Val, append(prefix, n.Key...))
-		if n.flags.hash != nil {
-			b := make([]byte, 6, 8)
-			b = append(b, []byte(n.flags.hash[:2])...)
-			var bi [8]byte
-			copy(bi[:], b)
-			//fmt.Println(b, int(binary.BigEndian.Uint64(bi[:])))
-			t.nodeCount[int(binary.BigEndian.Uint64(bi[:]))]++
-		}
-
-		//t.nodeCount[binary.BigEndian.Uint64(b)]++
-	case valueNode:
-		return
-	case hashNode:
-		rn, err := t.resolveHash(n, prefix)
-		if err != nil {
-			return 
-		}
-		t.countNodeNum(rn, prefix)
-	default:
-		return
-	}
-}
-*/
 func (t *Trie) SetRootNonce(newNonce uint64){
 	if t.root == nil {
 		fmt.Println("Error: cannot set nil root node's nonce")
