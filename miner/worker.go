@@ -23,8 +23,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	impt_log "log"
-	"os"
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
@@ -551,18 +549,6 @@ func (w *worker) taskLoop() {
 // resultLoop is a standalone goroutine to handle sealing result submitting
 // and flush relative data to the database.
 func (w *worker) resultLoop() {
-	fpLog, err := os.OpenFile("./experiment/impt.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		panic(err)
-	}
-	defer fpLog.Close()
-
-	impt_log.SetOutput(fpLog)
-
-	var (
-		startTime time.Time
-		elapsedTime time.Duration
-	)
 	for {
 		select {
 		case block := <-w.resultCh:
@@ -605,21 +591,15 @@ func (w *worker) resultLoop() {
 				}
 				logs = append(logs, receipt.Logs...)
 			}
-			startTime = time.Now()
 			// Commit block and state to database.
 			stat, err := w.chain.WriteBlockWithState(block, receipts, task.state)
 			if err != nil {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
 			}
-			elapsedTime = time.Since(startTime)
 
 			log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", hash,
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
-
-			if block.Number().Uint64() % loggingPeriod == 0 {
-				impt_log.Println("Block #:", block.Number().Uint64(), ", elapsed time for WriteBlockWithState():", elapsedTime.Seconds())
-			}
 			
 			// Broadcast the block and announce chain insertion event
 			w.mux.Post(core.NewMinedBlockEvent{Block: block})
