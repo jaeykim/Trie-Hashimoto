@@ -672,7 +672,11 @@ func (s *StateDB) IntermediateRootByNonce(deleteEmptyObjects bool, trieNonces []
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
 	}
-	return s.trie.HashByNonce(trieNonces, blockNum)
+	if len(trieNonces) == 0 {
+		return s.trie.Hash()
+	} else {
+		return s.trie.HashByNonce(trieNonces, blockNum)
+	}
 }
 
 // Prepare sets the current transaction hash and index and block hash which is
