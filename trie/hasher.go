@@ -45,7 +45,7 @@ type keccakState interface {
 type sliceBuffer []byte
 
 var fakeIMPT bool = true
-var prefixLength int = 2
+var prefixLength int = 3
 
 func (b *sliceBuffer) Write(data []byte) (n int, err error) {
 	*b = append(*b, data...)

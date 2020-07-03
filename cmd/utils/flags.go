@@ -447,6 +447,14 @@ var (
 		Name:  "miner.noverify",
 		Usage: "Disable remote sealing verification",
 	}
+	MinerIMPTFlag = cli.BoolFlag{
+		Name:  "impt",
+		Usage: "Do IMPT mining",
+	}
+	MinerFakeIMPTFlag = cli.BoolFlag{
+		Name:  "fakeimpt",
+		Usage: "Do IMPT mining with modifyHash()",
+	}
 	// Account settings
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
@@ -1303,6 +1311,12 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	}
 	if ctx.GlobalIsSet(MinerNoVerfiyFlag.Name) {
 		cfg.Noverify = ctx.Bool(MinerNoVerfiyFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerIMPTFlag.Name) {
+		cfg.IMPT = ctx.Bool(MinerIMPTFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerFakeIMPTFlag.Name) {
+		cfg.FakeIMPT = ctx.Bool(MinerFakeIMPTFlag.Name)
 	}
 }
 

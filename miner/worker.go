@@ -23,6 +23,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	impt_log "log"
+	"os"
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
@@ -34,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/impt"
 )
 
 const (
@@ -75,6 +76,8 @@ const (
 
 	// staleThreshold is the maximum depth of the acceptable stale block.
 	staleThreshold = 7
+
+	loggingPeriod = 10
 )
 
 // environment is the worker's current environment and holds all of the current state information.
@@ -91,7 +94,7 @@ type environment struct {
 	header    *types.Header
 	txs       []*types.Transaction
 	receipts  []*types.Receipt
-	trieNonces []*impt.TrieNonce
+	trieNonces []uint64
 }
 
 // task contains all information for consensus engine sealing and result submitting.
@@ -535,7 +538,7 @@ func (w *worker) taskLoop() {
 			w.pendingTasks[w.engine.SealHash(task.block.Header())] = task
 			w.pendingMu.Unlock()
 
-			if err := w.engine.Seal(w.chain, task.block, task.state, w.resultCh, stopCh); err != nil {
+			if err := w.engine.Seal(w.chain, task.block, task.state, w.resultCh, stopCh, w.config.IMPT); err != nil {
 				log.Warn("Block sealing failed", "err", err)
 			}
 		case <-w.exitCh:
@@ -548,6 +551,18 @@ func (w *worker) taskLoop() {
 // resultLoop is a standalone goroutine to handle sealing result submitting
 // and flush relative data to the database.
 func (w *worker) resultLoop() {
+	fpLog, err := os.OpenFile("./experiment/impt.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		panic(err)
+	}
+	defer fpLog.Close()
+
+	impt_log.SetOutput(fpLog)
+
+	var (
+		startTime time.Time
+		elapsedTime time.Duration
+	)
 	for {
 		select {
 		case block := <-w.resultCh:
@@ -590,15 +605,22 @@ func (w *worker) resultLoop() {
 				}
 				logs = append(logs, receipt.Logs...)
 			}
+			startTime = time.Now()
 			// Commit block and state to database.
 			stat, err := w.chain.WriteBlockWithState(block, receipts, task.state)
 			if err != nil {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
 			}
+			elapsedTime = time.Since(startTime)
+
 			log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", hash,
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
+			if block.Number().Uint64() % loggingPeriod == 0 {
+				impt_log.Println("Block #:", block.Number().Uint64(), ", elapsed time for WriteBlockWithState():", elapsedTime.Seconds())
+			}
+			
 			// Broadcast the block and announce chain insertion event
 			w.mux.Post(core.NewMinedBlockEvent{Block: block})
 
@@ -698,7 +720,6 @@ func (w *worker) updateSnapshot() {
 		w.current.txs,
 		uncles,
 		w.current.receipts,
-		w.current.trieNonces,
 	)
 
 	w.snapshotState = w.current.state.Copy()

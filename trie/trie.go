@@ -450,11 +450,7 @@ func (t *Trie) hashRoot(db *Database, onleaf LeafCallback, trieNonces *[]uint64,
 	h := newHasher(onleaf)
 	defer returnHasherToPool(h)
 	var count = uint64(0)
-	a, b, c := h.hash(t.root, db, true, trieNonces, isMining, blockNum, &count)
-	if trieNonces != nil {
-		fmt.Println(count, len(*trieNonces))
-	}
-	return a, b, c
+	return h.hash(t.root, db, true, trieNonces, isMining, blockNum, &count)
 }
 
 func (t *Trie) DB() *Database{

@@ -44,7 +44,7 @@ const (
 	// staleThreshold is the maximum depth of the acceptable stale but valid ethash solution.
 	staleThreshold = 7
 	loggingPeriod = 10
-	isLogging = true
+	isLogging = false
 )
 
 var (
@@ -54,7 +54,7 @@ var (
 
 // Seal implements consensus.Engine, attempting to find a nonce that satisfies
 // the block's difficulty requirements.
-func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, state *state.StateDB, results chan<- *types.Block, stop <-chan struct{}) error {
+func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, state *state.StateDB, results chan<- *types.Block, stop <-chan struct{}, impt bool) error {
 
 	// no tx, no mining (jmlee)
 	if len(block.Transactions()) == 0 {
@@ -75,7 +75,7 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 	}
 	// If we're running a shared PoW, delegate sealing to it
 	if ethash.shared != nil {
-		return ethash.shared.Seal(chain, block, state, results, stop)
+		return ethash.shared.Seal(chain, block, state, results, stop, impt)
 	}
 	// Create a runner and the multiple search threads it directs
 	abort := make(chan struct{})
@@ -109,7 +109,7 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 		pend.Add(1)
 		go func(id int, nonce uint64) {
 			defer pend.Done()
-			ethash.mine(block, state, id, nonce, abort, locals)
+			ethash.mine(block, state, id, nonce, abort, locals, impt)
 		}(i, uint64(ethash.rand.Int63()))
 	}
 	// Wait until sealing is terminated or a nonce is found
@@ -130,7 +130,7 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 		case <-ethash.update:
 			// Thread count was changed on user request, restart
 			close(abort)
-			if err := ethash.Seal(chain, block, state, results, stop); err != nil {
+			if err := ethash.Seal(chain, block, state, results, stop, impt); err != nil {
 				log.Error("Failed to restart sealing after update", "err", err)
 			}
 		}
@@ -142,7 +142,7 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 
 // mine is the actual proof-of-work miner that searches for a nonce starting from
 // seed that results in correct final block difficulty.
-func (ethash *Ethash) mine(block *types.Block, state *state.StateDB, id int, seed uint64, abort chan struct{}, found chan *types.Block) {
+func (ethash *Ethash) mine(block *types.Block, state *state.StateDB, id int, seed uint64, abort chan struct{}, found chan *types.Block, impt bool) {
 	// Extract some data from the header
 	var (
 		header  = block.Header()
@@ -173,7 +173,7 @@ search:
 			break search
 
 		default:
-			if (!minedIMPT) {
+			if impt && !minedIMPT {
 				// Do IMPT mining
 				// HashWithNonce actually does mining work for trie nodes
 				startTime = time.Now()
