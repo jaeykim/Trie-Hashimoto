@@ -19,7 +19,6 @@ package miner
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"math/big"
 	"strconv"
 	"sync"
@@ -782,7 +781,6 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		w.current.state.Prepare(tx.Hash(), common.Hash{}, w.current.tcount)
 
 		// logging tx apply time
-		fmt.Println("tx hash to log:", tx.Hash().Hex())
 		startTime := time.Now()
 		logs, err := w.commitTransaction(tx, coinbase)
 		elapsed := time.Since(startTime)
