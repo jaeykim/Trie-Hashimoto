@@ -1313,10 +1313,10 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 		cfg.Noverify = ctx.Bool(MinerNoVerfiyFlag.Name)
 	}
 	if ctx.GlobalIsSet(MinerIMPTFlag.Name) {
-		cfg.IMPT = ctx.Bool(MinerIMPTFlag.Name)
+		cfg.IMPT = ctx.GlobalBool(MinerIMPTFlag.Name)
 	}
 	if ctx.GlobalIsSet(MinerFakeIMPTFlag.Name) {
-		cfg.FakeIMPT = ctx.Bool(MinerFakeIMPTFlag.Name)
+		cfg.FakeIMPT = ctx.GlobalBool(MinerFakeIMPTFlag.Name)
 	}
 }
 
