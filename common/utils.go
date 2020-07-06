@@ -8,7 +8,7 @@ import (
 )
 
 // LogFilePath is the path of the log files
-const LogFilePath = "./experiment/" // same as GOPATH/src/github.com/ethereum/go-ethereum/build/bin/experiment/
+const LogFilePath = "./experiment/impt_log_files/" // same as GOPATH/src/github.com/ethereum/go-ethereum/build/bin/experiment/
 
 // LogToFile logs the string to the file (jmlee)
 func LogToFile(fileName, logData string) {
