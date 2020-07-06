@@ -697,6 +697,13 @@ func (bc *BlockChain) insert(block *types.Block) {
 	logData = "inserted block " + bc.CurrentBlock().Header().Number.String() + "\n"
 	common.LogToFile("impt_which_level.txt", logData)
 
+	// log for dirty trie node count
+	trieNonces := bc.CurrentBlock().TrieNonces()
+	logData = "dirtes:" + strconv.Itoa(len(trieNonces)) + ":\n"
+	timeStamp := time.Now().UnixNano()
+	logData += "inserted block:" + bc.CurrentBlock().Header().Number.String() + ":" + strconv.FormatInt(timeStamp, 10) + ":\n"
+	common.LogToFile("impt_block_process_time.txt", logData)
+
 	// print state trie (jmlee)
 	// fmt.Println("$$$ print state trie at block", bc.CurrentBlock().Header().Number)
 	// ldb := trie.NewDatabase(bc.db)
@@ -1380,7 +1387,18 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if err := bc.hc.WriteTd(block.Hash(), block.NumberU64(), externTd); err != nil {
 		return NonStatTy, err
 	}
-	rawdb.WriteBlock(bc.db, block)
+
+	// measure block write time
+	// rawdb.WriteBlock(bc.db, block)
+	startTime := time.Now()
+	rawdb.WriteBody(bc.db, block.Hash(), block.NumberU64(), block.Body())
+	elapsed := time.Since(startTime)
+	logData := "blockWriteTime(Body:Header):" + strconv.Itoa(int(elapsed.Nanoseconds()))
+	startTime = time.Now()
+	rawdb.WriteHeader(bc.db, block.Header())
+	elapsed = time.Since(startTime)
+	logData += ":" + strconv.Itoa(int(elapsed.Nanoseconds())) + ":"
+	common.LogToFile("impt_block_process_time.txt", logData)
 
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
@@ -1390,9 +1408,22 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// If we're running an archive node, always flush
 	if bc.cacheConfig.TrieDirtyDisabled {
-		if err := triedb.Commit(root, false); err != nil {
+
+		// if err := triedb.Commit(root, false); err != nil {
+		// 	return NonStatTy, err
+		// }
+
+		// measure state write time (jmlee)
+		startTime := time.Now()
+		err := triedb.Commit(root, false)
+		elapsed := time.Since(startTime)
+		logData := "stateFlushTime:"
+		logData += strconv.Itoa(int(elapsed.Nanoseconds())) + ":"
+		common.LogToFile("impt_block_process_time.txt", logData)
+		if err != nil {
 			return NonStatTy, err
 		}
+
 	} else {
 		// Full but not archive node, do proper garbage collection
 		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
