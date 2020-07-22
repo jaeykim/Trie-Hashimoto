@@ -435,6 +435,8 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	if t.db == nil {
 		panic("commit called on trie with nil database")
 	}
+	// Print the size of state trie
+	if t.root != nil { fmt.Println("trie size: ", t.TrieSize()) }
 	hash, cached, err := t.hashRoot(t.db, onleaf, nil, false, 0)
 	if err != nil {
 		return common.Hash{}, err
@@ -451,6 +453,14 @@ func (t *Trie) hashRoot(db *Database, onleaf LeafCallback, trieNonces *[]uint64,
 	defer returnHasherToPool(h)
 	var count = uint64(0)
 	return h.hash(t.root, db, true, trieNonces, isMining, blockNum, &count)
+}
+
+// TrieSize returns the total node size in the state trie (sjkim)
+func (t *Trie) TrieSize() common.StorageSize {
+	if t.root == nil {
+		return common.StorageSize(0)
+	}
+	return t.root.size()
 }
 
 func (t *Trie) DB() *Database{

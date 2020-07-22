@@ -21,6 +21,7 @@ import (
 	"io"
 	"strings"
 	"math/big"
+	"reflect"
 	"encoding/binary" // (sjkim)
 	
 	"github.com/ethereum/go-ethereum/common"
@@ -35,6 +36,7 @@ type node interface {
 	cache() (hashNode, bool)
 	setNonce(uint64) // set node's nonce (jmlee)
 	getNonce() uint64 // get node's nonce (jmlee)
+	size() common.StorageSize
 }
 
 type (
@@ -304,6 +306,37 @@ func (n hashNode) infostring(ind string, db *Database) string {
 		// error: should not reach here!
 		return fmt.Sprintf("<%x> ", []byte(n))
 	}
+}
+
+// size() reculsively calculates the total node size under the current node (sjkim)
+func (n *fullNode) size() common.StorageSize {
+	size := common.StorageSize(reflect.TypeOf(*n).Size()) + common.StorageSize(cap(n.flags.hash))
+	//fmt.Println("fullNode, ", size)
+	for _, node := range &n.Children {
+		if node != nil {
+			size += node.size()
+		}
+	}
+	return size
+}
+
+func (n *shortNode) size() common.StorageSize {
+	size := common.StorageSize(reflect.TypeOf(*n).Size()) + common.StorageSize(cap(n.Key)) + common.StorageSize(cap(n.flags.hash))
+	//fmt.Println("shortNode, ", size, common.StorageSize(cap(n.Key)), common.StorageSize(unsafe.Sizeof(n.Key)), common.StorageSize(unsafe.Sizeof(n.Val)), common.StorageSize(unsafe.Sizeof(n.Nonce)), common.StorageSize(unsafe.Sizeof(n.flags.dirty)), common.StorageSize(unsafe.Sizeof(n.flags.hash)), common.StorageSize(cap(n.flags.hash)))
+	size += n.Val.size()
+	return size
+}
+
+func (n hashNode) size() common.StorageSize {
+	size := common.StorageSize(reflect.TypeOf(n).Size()) + common.StorageSize(cap(n))
+	//fmt.Println("hashNode, ", size, common.StorageSize(cap(n)))
+	return size
+}
+
+func (n valueNode) size() common.StorageSize {
+	size := common.StorageSize(reflect.TypeOf(n).Size()) + common.StorageSize(cap(n))
+	//fmt.Println("valueNode, ", size, common.StorageSize(cap(n)))
+	return size
 }
 
 // same struct copied from state_object.go to decode data
