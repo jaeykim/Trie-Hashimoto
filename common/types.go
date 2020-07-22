@@ -37,7 +37,7 @@ const (
 	// AddressLength is the expected length of the address
 	AddressLength = 20
 	// inspecting database epoch (# of blocks) (jmlee)
-	InspectingDatabaseEpoch = uint64(100)
+	InspectingDatabaseEpoch = uint64(10000)
 )
 
 var (

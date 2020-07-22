@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -89,9 +90,9 @@ type environment struct {
 	tcount    int            // tx count in cycle
 	gasPool   *core.GasPool  // available gas used to pack transactions
 
-	header    *types.Header
-	txs       []*types.Transaction
-	receipts  []*types.Receipt
+	header     *types.Header
+	txs        []*types.Transaction
+	receipts   []*types.Receipt
 	trieNonces []uint64
 }
 
@@ -600,7 +601,7 @@ func (w *worker) resultLoop() {
 
 			log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", hash,
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
-			
+
 			// Broadcast the block and announce chain insertion event
 			w.mux.Post(core.NewMinedBlockEvent{Block: block})
 
@@ -779,7 +780,14 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		// Start executing the transaction
 		w.current.state.Prepare(tx.Hash(), common.Hash{}, w.current.tcount)
 
+		// logging tx apply time
+		startTime := time.Now()
 		logs, err := w.commitTransaction(tx, coinbase)
+		elapsed := time.Since(startTime)
+		logData := "commitTxTime:"
+		logData += strconv.Itoa(int(elapsed.Nanoseconds())) + ":"
+		common.LogToFile("impt_block_process_time.txt", logData)
+
 		switch err {
 		case core.ErrGasLimitReached:
 			// Pop the current out-of-gas transaction without shifting in the next from the account
