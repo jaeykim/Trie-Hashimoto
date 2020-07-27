@@ -70,3 +70,4 @@ impt/index/index_total/MANIFEST-000000
 build/bin/experiment/
 vendor/github.com/syndtr/goleveldb/leveldb/
 impt_experiment/
+core/blockchain.go
