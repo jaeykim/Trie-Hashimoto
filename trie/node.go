@@ -22,7 +22,7 @@ import (
 	"strings"
 	"math/big"
 	"reflect"
-	"encoding/binary" // (sjkim)
+	"encoding/binary"
 	
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
