@@ -66,3 +66,9 @@ impt/index/index_total/CURRENT
 impt/index/index_total/LOCK
 impt/index/index_total/LOG
 impt/index/index_total/MANIFEST-000000
+
+build/bin/init.sh
+build/bin/full.sh
+build/bin/experiment/
+vendor/github.com/syndtr/goleveldb/leveldb/
+impt_experiment/
