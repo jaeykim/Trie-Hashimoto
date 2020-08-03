@@ -110,6 +110,7 @@ func (n rawNode) infostring(ind string, db *Database) string {
 }                                          // (jmlee)
 func (n rawNode) setNonce(newNonce uint64) { panic("this should never end up in a live trie") }
 func (n rawNode) getNonce() uint64         { panic("this should never end up in a live trie") }
+func (n rawNode) size() common.StorageSize { panic("this should never end up in a live trie") }
 
 // rawFullNode represents only the useful data content of a full node, with the
 // caches and flags stripped out to minimize its data storage. This type honors
@@ -131,10 +132,8 @@ func (n rawFullNode) infostring(ind string, db *Database) string {
 	panic("this should never end up in a live trie")
 }                                              // (jmlee)
 func (n rawFullNode) setNonce(newNonce uint64) { panic("this should never end up in a live trie") }
-func (n rawFullNode) getNonce() uint64 {
-	//panic("this should never end up in a live trie")
-	return n.Nonce
-}
+func (n rawFullNode) getNonce() uint64 { panic("this should never end up in a live trie") }
+func (n rawFullNode) size() common.StorageSize { panic("this should never end up in a live trie") }
 
 func (n rawFullNode) EncodeRLP(w io.Writer) error {
 	var nodes [18]node
@@ -162,6 +161,7 @@ func (n rawOptFullNode) infostring(ind string, db *Database) string {
 }                                                 // (jmlee)
 func (n rawOptFullNode) setNonce(newNonce uint64) { panic("this should never end up in a live trie") }
 func (n rawOptFullNode) getNonce() uint64         { panic("this should never end up in a live trie") }
+func (n rawOptFullNode) size() common.StorageSize { panic("this should never end up in a live trie") }
 
 func (n rawOptFullNode) EncodeRLP(w io.Writer) error {
 	var nodes [3]node
@@ -196,6 +196,7 @@ func (n rawShortNode) infostring(ind string, db *Database) string {
 }                                               // (jmlee)
 func (n rawShortNode) setNonce(newNonce uint64) { panic("this should never end up in a live trie") }
 func (n rawShortNode) getNonce() uint64         { panic("this should never end up in a live trie") }
+func (n rawShortNode) size() common.StorageSize { panic("this should never end up in a live trie") }
 
 func (n rawShortNode) EncodeRLP(w io.Writer) error {
 	var nodes [3]node
