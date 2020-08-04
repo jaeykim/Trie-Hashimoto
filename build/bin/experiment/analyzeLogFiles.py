@@ -14,6 +14,8 @@ ORIGINALLOGPATH = 'imptData/impt_data_original_geth_block_process_time/impt_log_
 ORIGINALCSVPATH = ORIGINALLOGPATH + 'csv/'
 ORIGINALGRAPHPATH = ORIGINALLOGPATH + 'graph/'
 
+MAXBLOCKNUM = 10
+
 # make empty 2d list -> list[b][a]
 def TwoD(a, b, isInt):
     if isInt:
@@ -30,8 +32,7 @@ def makeDir(path):
 # analyze impt_block_process_time.txt log files
 def analyzeBlockProcessTimeLog(isIMPT):
 
-    # MAXBLOCKNUM = 500000
-    MAXBLOCKNUM = 10
+    # MAXBLOCKNUM = 10
     TIMESNUM = 7
     graphNames = ["totalCommitTxTime", "commitTxCount", "bodyWriteTime", "headerWriteTime", "stateFlushTime", "dirtyNodesCount", "blockInsertedTime"]
     
@@ -223,7 +224,7 @@ def analyzeDatabaseReadTimeLog(isIMPT):
     # num of leveldb for indexed trie nodes (1 means no additional db for trie nodes)
     TRIEDBNUM = 1
 
-    MAXBLOCKNUM = 2200
+    # MAXBLOCKNUM = 2200
     DATANUM = 3
 
     if isIMPT:
@@ -288,7 +289,7 @@ def analyzeDatabaseReadTimeLog(isIMPT):
 # analyze impt_leveldb_compaction_log.txt log files
 def analyzeLevelDBCompaction(isIMPT):
 
-    MAXBLOCKNUM = 1340
+    # MAXBLOCKNUM = 1340
     DBNUM = 1   # num of db in the log file (1 means no additional db for trie nodes)
     MAXLEVEL = 7   # max num of levels in levelDB (ex. 7 means level 0~6 exists)
     COMPACTIONTYPESNUM = 5  # memory, level0, non-level0, seek, move compaction
@@ -487,10 +488,10 @@ def analyzeLevelDBCompaction(isIMPT):
 # analyze impt_which_level.txt log files
 def analyzeLevelDBReadLevel(isIMPT):
 
-    # max num of levels in levelDB (ex. 7 means level 0~5 & memory level (= level 6) exist)
-    MAXLEVEL = 7
+    # max num of levels in levelDB (ex. 8 means level 0~6 & memory level (= level 7) exist)
+    MAXLEVEL = 8
 
-    MAXBLOCKNUM = 1340
+    # MAXBLOCKNUM = 1340
 
     if isIMPT:
         LOGFILEPATH = IMPTLOGPATH + 'impt_which_level.txt'
@@ -569,20 +570,20 @@ if __name__ == "__main__":
     makeDir(ORIGINALGRAPHPATH)
 
     # analyze impt_block_process_time.txt log files
-    # analyzeBlockProcessTimeLog(True)
-    # analyzeBlockProcessTimeLog(False)
+    analyzeBlockProcessTimeLog(True)
+    analyzeBlockProcessTimeLog(False)
 
     # analyze impt_database_inspect.txt log files
-    # analyzeDatabaseInspectLog(True)
-    # analyzeDatabaseInspectLog(False)
+    analyzeDatabaseInspectLog(True)
+    analyzeDatabaseInspectLog(False)
 
     # analyze impt_data_log.txt log files
-    # analyzeDatabaseReadTimeLog(True)
-    # analyzeDatabaseReadTimeLog(False)
+    analyzeDatabaseReadTimeLog(True)
+    analyzeDatabaseReadTimeLog(False)
 
     # analyze impt_leveldb_compaction_log.txt log files
-    # analyzeLevelDBCompaction(True)
-    # analyzeLevelDBCompaction(False)
+    analyzeLevelDBCompaction(True)
+    analyzeLevelDBCompaction(False)
 
     # analyze impt_which_level.txt log files
     analyzeLevelDBReadLevel(True)
