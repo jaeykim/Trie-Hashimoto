@@ -214,6 +214,71 @@ def analyzeDatabaseInspectLog(isIMPT):
 
 
 
+# analyze impt_data_log.txt log files
+def analyzeDatabaseReadTimeLog(isIMPT):
+
+    # num of leveldb for indexed trie nodes (1 means no additional db for trie nodes)
+    TRIEDBNUM = 1
+
+    MAXBLOCKNUM = 2200
+    DATANUM = 3
+
+    if isIMPT:
+        LOGFILEPATH = IMPTLOGPATH + 'impt_data_log.txt'
+        GRAPHPATH = IMPTGRAPHPATH + 'databaseReadTime/'
+    else:
+        LOGFILEPATH = ORIGINALLOGPATH + 'impt_data_log.txt'
+        GRAPHPATH = ORIGINALGRAPHPATH + 'databaseReadTime/'
+    makeDir(GRAPHPATH)
+
+    # logDatas[0][blockNum] = total database read time (ns)
+    # logDatas[1][blockNum] = # of database read
+    # logDatas[2][blockNum] = database size (KB)
+    logDatas = TwoD(MAXBLOCKNUM+1, DATANUM)
+
+    # read data from log file
+    f = open(LOGFILEPATH, 'r')
+    rdr = csv.reader(f)
+    blockNum = 1
+    for line in rdr:
+        if len(line) == 0:
+            continue
+
+        lastElement = line[-1]
+        line = line[:-1]
+        line = list(map(int, line))
+
+        if len(line) != 0 and lastElement != '@':
+            # get db search times
+            logDatas[0][blockNum] = logDatas[0][blockNum] + int(line[2])
+            logDatas[1][blockNum] = logDatas[1][blockNum] + 1
+        else:
+            # get db size
+            logDatas[2][blockNum] = int(line[2])
+            if blockNum == MAXBLOCKNUM:
+                break
+            blockNum = blockNum + 1
+
+    f.close()
+
+
+
+    # make log data as a csv file
+    blockNums = list(range(1,MAXBLOCKNUM+1))
+    data = [blockNums, logDatas[0][1:], logDatas[1][1:], logDatas[2][1:]]
+    export_data = zip_longest(*data, fillvalue = '')
+    if isIMPT:
+        csvFilePath = IMPTCSVPATH
+    else:
+        csvFilePath = ORIGINALCSVPATH
+    with open(csvFilePath + "database_read_time.csv", 'w', encoding="ISO-8859-1", newline='') as myfile:
+        wr = csv.writer(myfile)
+        wr.writerow(("block number", "total database read time (ns)", "# of database read", "database size (KB)"))
+        wr.writerows(export_data)
+    myfile.close()
+
+
+
 if __name__ == "__main__":
 
     # make directory to save files/graphs
@@ -229,6 +294,10 @@ if __name__ == "__main__":
     # analyze impt_database_inspect.txt log files
     analyzeDatabaseInspectLog(True)
     analyzeDatabaseInspectLog(False)
+
+    # analyze impt_data_log.txt log files
+    analyzeDatabaseReadTimeLog(True)
+    analyzeDatabaseReadTimeLog(False)
 
     print("Done")
 
