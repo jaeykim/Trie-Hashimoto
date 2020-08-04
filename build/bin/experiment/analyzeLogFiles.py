@@ -484,6 +484,82 @@ def analyzeLevelDBCompaction(isIMPT):
 
 
 
+# analyze impt_which_level.txt log files
+def analyzeLevelDBReadLevel(isIMPT):
+
+    # max num of levels in levelDB (ex. 7 means level 0~5 & memory level (= level 6) exist)
+    MAXLEVEL = 7
+
+    MAXBLOCKNUM = 1340
+
+    if isIMPT:
+        LOGFILEPATH = IMPTLOGPATH + 'impt_which_level.txt'
+        GRAPHPATH = IMPTGRAPHPATH + 'leveldbReadLevel/'
+    else:
+        LOGFILEPATH = ORIGINALLOGPATH + 'impt_which_level.txt'
+        GRAPHPATH = ORIGINALGRAPHPATH + 'leveldbReadLevel/'
+    makeDir(GRAPHPATH)
+
+    # levelCount[level][blockNum] = # of the level searched count at the block
+    levelCount = TwoD(MAXBLOCKNUM+1, MAXLEVEL, True)
+
+    # read data from log file
+    f = open(LOGFILEPATH, 'r')
+    rdr = csv.reader(f)
+    blockNum = 1    # start block number to logging
+    for line in rdr:
+        if len(line) == 0:
+            continue
+
+        # print(line)
+        words = line[0].split(" ")
+
+        if len(words) == 5:
+            levelNum = int(words[-1])
+            levelCount[levelNum][blockNum] = levelCount[levelNum][blockNum] + 1
+        
+        if len(words) == 3:
+            blockNum = int(words[-1])
+            print("at block", blockNum)
+            for i in range(MAXLEVEL):
+                if i < MAXLEVEL - 1:
+                    print(" level", i, "count:", levelCount[i][blockNum])
+                else:
+                    print(" memory db count:", levelCount[i][blockNum])
+            if blockNum == MAXBLOCKNUM:
+                break
+            blockNum = blockNum + 1
+            print()
+
+    f.close()
+
+
+    # make log data as a csv file
+    blockNums = list(range(1,MAXBLOCKNUM+1))
+    data = [blockNums]
+    columnTitles = ["block number"]
+    for i in range(MAXLEVEL):
+        data.append(levelCount[i][1:])
+        columnTitles.append("level " + str(i))
+    columnTitles[-1] = "memory level"
+    export_data = zip_longest(*data, fillvalue = '')
+    if isIMPT:
+        csvFilePath = IMPTCSVPATH
+    else:
+        csvFilePath = ORIGINALCSVPATH
+    with open(csvFilePath + "leveldb_read_level.csv", 'w', encoding="ISO-8859-1", newline='') as myfile:
+        wr = csv.writer(myfile)
+        wr.writerow(["how many elements are searched at each level"])
+        wr.writerow(columnTitles)
+        wr.writerows(export_data)
+    myfile.close()
+
+    #
+    # TODO?: drawing graphs
+    #
+
+
+
 if __name__ == "__main__":
 
     # make directory to save files/graphs
@@ -493,21 +569,23 @@ if __name__ == "__main__":
     makeDir(ORIGINALGRAPHPATH)
 
     # analyze impt_block_process_time.txt log files
-    analyzeBlockProcessTimeLog(True)
-    analyzeBlockProcessTimeLog(False)
+    # analyzeBlockProcessTimeLog(True)
+    # analyzeBlockProcessTimeLog(False)
 
     # analyze impt_database_inspect.txt log files
-    analyzeDatabaseInspectLog(True)
-    analyzeDatabaseInspectLog(False)
+    # analyzeDatabaseInspectLog(True)
+    # analyzeDatabaseInspectLog(False)
 
     # analyze impt_data_log.txt log files
-    analyzeDatabaseReadTimeLog(True)
-    analyzeDatabaseReadTimeLog(False)
+    # analyzeDatabaseReadTimeLog(True)
+    # analyzeDatabaseReadTimeLog(False)
 
     # analyze impt_leveldb_compaction_log.txt log files
-    analyzeLevelDBCompaction(True)
-    analyzeLevelDBCompaction(False)
+    # analyzeLevelDBCompaction(True)
+    # analyzeLevelDBCompaction(False)
+
+    # analyze impt_which_level.txt log files
+    analyzeLevelDBReadLevel(True)
+    analyzeLevelDBReadLevel(False)
 
     print("Done")
-
-
