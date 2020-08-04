@@ -34,10 +34,11 @@ def analyzeBlockProcessTimeLog(isIMPT):
     
     if isIMPT:
         LOGFILEPATH = IMPTLOGPATH + 'impt_block_process_time.txt'
-        GRAPHPATH = IMPTGRAPHPATH
+        GRAPHPATH = IMPTGRAPHPATH + 'blockProcessTime/'
     else:
         LOGFILEPATH = ORIGINALLOGPATH + 'impt_block_process_time.txt'
-        GRAPHPATH = ORIGINALGRAPHPATH
+        GRAPHPATH = ORIGINALGRAPHPATH + 'blockProcessTime/'
+    makeDir(GRAPHPATH)
 
     # times[0][blockNum] = totalCommitTxTime (ns)
     # times[1][blockNum] = commitTxCount
@@ -99,8 +100,8 @@ def analyzeBlockProcessTimeLog(isIMPT):
 
 
     # make log data as a csv file
-    d = [blockNums, times[0][1:], times[1][1:], avgCommitTxTime[1:], times[2][1:], times[3][1:], times[4][1:], times[5][1:], times[6][1:]]
-    export_data = zip_longest(*d, fillvalue = '')
+    data = [blockNums, times[0][1:], times[1][1:], avgCommitTxTime[1:], times[2][1:], times[3][1:], times[4][1:], times[5][1:], times[6][1:]]
+    export_data = zip_longest(*data, fillvalue = '')
     if isIMPT:
         csvFilePath = IMPTCSVPATH
     else:
@@ -140,6 +141,79 @@ def analyzeBlockProcessTimeLog(isIMPT):
 
 
 
+# analyze impt_database_inspect.txt log files
+def analyzeDatabaseInspectLog(isIMPT):
+
+    # db inspect epoch (per x blocks)
+    DBINSPECTEPOCH = 10000
+
+    # meaning of each log line (21 contents) (delimiter: ',') (unit: KB) (type: float)
+    # headerSize, bodySize, receiptSize, tdSize, numHashPairing, hashNumPairing, txlookupSize, bloomBitsSize, trieSize, preimageSize,
+    # cliqueSnapsSize, metadata, ancientHeaders, ancientBodies, ancientReceipts, ancientTds, ancientHashes, chtTrieNodes, bloomTrieNodes, total, unaccounted
+    SIZESNUM = 21
+    graphNames = ["headerSize", "bodySize", "receiptSize", "tdSize", "numHashPairing", "hashNumPairing", "txlookupSize", "bloomBitsSize", "trieSize", "preimageSize",
+    "cliqueSnapsSize", "metadata", "ancientHeaders", "ancientBodies", "ancientReceipts", "ancientTds", "ancientHashes", "chtTrieNodes", "bloomTrieNodes", "total", "unaccounted"]
+
+    if isIMPT:
+        LOGFILEPATH = IMPTLOGPATH + 'impt_database_inspect.txt'
+        GRAPHPATH = IMPTGRAPHPATH + 'databaseInspect/'
+    else:
+        LOGFILEPATH = ORIGINALLOGPATH + 'impt_database_inspect.txt'
+        GRAPHPATH = ORIGINALGRAPHPATH + 'databaseInspect/'
+    makeDir(GRAPHPATH)
+
+    LINENUM = sum(1 for line in open(LOGFILEPATH))
+    sizes = TwoD(LINENUM, SIZESNUM) # sizes[contents index] = list of its inspected sizes
+
+    # read data from log file
+    f = open(LOGFILEPATH, 'r')
+    rdr = csv.reader(f)
+    lineNum = 0
+    for line in rdr:
+        if len(line) == 0:
+            continue
+
+        for i in range(len(line)-1):
+            sizes[i][lineNum] = float(line[i])
+
+        lineNum = lineNum + 1
+
+    f.close()
+
+    # make log data as a csv file
+    blockNums = list(range(1,LINENUM+1))
+    blockNums = [DBINSPECTEPOCH*x for x in blockNums]
+    data = [blockNums]
+    for i in range(SIZESNUM):
+        data.append(sizes[i])
+    export_data = zip_longest(*data, fillvalue = '')
+    if isIMPT:
+        csvFilePath = IMPTCSVPATH
+    else:
+        csvFilePath = ORIGINALCSVPATH
+    with open(csvFilePath + "database_inspect.csv", 'w', encoding="ISO-8859-1", newline='') as myfile:
+        wr = csv.writer(myfile)
+        wr.writerow(["all sizes are KB"])
+        wr.writerow(("block number", "headerSize", "bodySize", "receiptSize", "tdSize", "numHashPairing", "hashNumPairing", "txlookupSize", "bloomBitsSize", "trieSize", "preimageSize",
+    "cliqueSnapsSize", "metadata", "ancientHeaders", "ancientBodies", "ancientReceipts", "ancientTds", "ancientHashes", "chtTrieNodes", "bloomTrieNodes", "total", "unaccounted"))
+        wr.writerows(export_data)
+    myfile.close()
+
+    # draw graphs
+    print("Drawing graphs...")
+    for i in range(SIZESNUM):
+        plt.figure()
+        plt.title(graphNames[i], pad=10)                    # set graph title
+        plt.xlabel('block num', labelpad=10)                # set x axis
+        plt.ylabel(graphNames[i] + ' (KB)', labelpad=10)    # set y axis
+        plt.plot(blockNums, sizes[i])                       # draw scatter graph
+
+        # save graph
+        graphName = graphNames[i]
+        plt.savefig(GRAPHPATH+graphName)
+
+
+
 if __name__ == "__main__":
 
     # make directory to save files/graphs
@@ -152,4 +226,10 @@ if __name__ == "__main__":
     analyzeBlockProcessTimeLog(True)
     analyzeBlockProcessTimeLog(False)
 
+    # analyze impt_database_inspect.txt log files
+    analyzeDatabaseInspectLog(True)
+    analyzeDatabaseInspectLog(False)
+
     print("Done")
+
+
