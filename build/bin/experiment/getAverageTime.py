@@ -4,7 +4,7 @@ mpl.use('Agg')
 import matplotlib.pyplot as plt
 
 
-TrieDBNum = 1   # num of leveldb for indexed trie nodes
+TRIEDBNUM = 1   # num of leveldb for indexed trie nodes
 # LogFilePath = 'impt_data_log.txt'   # impt log file path
 LogFilePath = 'imptData/impt_data_blockNum_indexed_level_logging/impt_data_log.txt' # impt log file path
 # LogFilePath = 'imptData/impt_data_original_geth_level_logging/impt_data_log.txt' # impt log file path
@@ -13,14 +13,14 @@ GraphPath = 'collectedData/imptGraph/'  # impt graph image path
 
 # db search times for each block
 trieDBTimes = list()
-for i in range(TrieDBNum):
+for i in range(TRIEDBNUM):
     trieDBTimes.append(list())
 totalDBTimes = list()
 
 # db avg search times for all blocks
 trieDBAvgTimes = list()
 trieDBSizes = list()
-for i in range(TrieDBNum):
+for i in range(TRIEDBNUM):
     trieDBAvgTimes.append(list())
     trieDBSizes.append(list())
 totalDBAvgTimes = list()
@@ -28,7 +28,7 @@ totalDBSizes = list()
 
 # db search times for all blocks
 allTrieDBTimes = list()
-for i in range(TrieDBNum):
+for i in range(TRIEDBNUM):
     allTrieDBTimes.append(list())
 allTotalDBTimes = list()
 
@@ -62,12 +62,12 @@ for line in rdr:
         # print block num & db size
         blockNum = line[0]
         sizesLog = ""
-        for i in range(TrieDBNum+1):
+        for i in range(TRIEDBNUM+1):
             sizesLog += str(line[1+i]) + " KB / "
         print("db size at block", blockNum, ":",sizesLog)
 
         # print avg search time
-        for i in range(TrieDBNum):
+        for i in range(TRIEDBNUM):
             if len(trieDBTimes[i]) != 0:
                 avgTime = sum(trieDBTimes[i])/len(trieDBTimes[i])
                 print("average search time in trie db", i, ":\t", int(avgTime), "ns", "(", len(trieDBTimes[i]), "queries )")
@@ -79,16 +79,16 @@ for line in rdr:
         if len(totalDBTimes) != 0:
             avgTime = sum(totalDBTimes)/len(totalDBTimes)
             print("average search time in total db :\t", int(avgTime), "ns", "(", len(totalDBTimes), "queries )")
-            if line[TrieDBNum+1] != 0:
+            if line[TRIEDBNUM+1] != 0:
                 totalDBAvgTimes.append(int(avgTime))
-                totalDBSizes.append(line[TrieDBNum+1])
+                totalDBSizes.append(line[TRIEDBNUM+1])
         else:
             print("no db search in this block")
         print()
 
         # reset lists for the next block
         trieDBTimes = list()
-        for i in range(TrieDBNum):
+        for i in range(TRIEDBNUM):
             trieDBTimes.append(list())
         totalDBTimes = list()
 
@@ -100,7 +100,7 @@ f.close()
 print("\n\nfinal result\n")
 trieTimeSum = 0
 trieTimeCnt = 0
-for i in range(TrieDBNum):
+for i in range(TRIEDBNUM):
     if len(allTrieDBTimes[i]) != 0:
         avgTime = sum(allTrieDBTimes[i])/len(allTrieDBTimes[i])
         print("average search time in trie db", i, ":\t", int(avgTime), "ns", "(", len(allTrieDBTimes[i]), "queries )")
@@ -122,8 +122,8 @@ print("\n\nreal final result ( outlier criteria: x", outlierCrt, ")\n")
 realTrieTimeSum = 0
 realTrieTimeCnt = 0
 trieOutlierCnt = 0
-realTrieAvgTimes = [0]*TrieDBNum
-for i in range(TrieDBNum):
+realTrieAvgTimes = [0]*TRIEDBNUM
+for i in range(TRIEDBNUM):
     if len(allTrieDBTimes[i]) != 0:
         avgTime = int(sum(allTrieDBTimes[i])/len(allTrieDBTimes[i]))
         realList = [time for time in allTrieDBTimes[i] if int(time) < outlierCrt*avgTime]
@@ -149,7 +149,7 @@ print("real average search time in total db :\t", int(sum(realList)/len(realList
 # draw graphs
 maxTime = int(10000000*0.6) # to cut out too big value from graph
 print("drawing graphs...")
-for i in range(TrieDBNum):
+for i in range(TRIEDBNUM):
     if len(trieDBAvgTimes[i]) != 0:
         # delete outliers
         # for j in range(len(trieDBAvgTimes)):

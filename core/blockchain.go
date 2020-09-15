@@ -636,7 +636,8 @@ func (bc *BlockChain) insert(block *types.Block) {
 	}
 
 	// print blocknum & leveldbs size for impt data log
-	dbPath := "/home/jmlee/data/impt/db_full/geth/"
+	dbPath := "/home/jmlee/ssd/original_geth/db_full/geth/" // path for original geth
+	// dbPath := "/home/jmlee/data/impt/db_full/geth/"	// path for impt geth
 	logData := ""
 	// fmt.Println("block", bc.CurrentBlock().Header().Number, "is inseted")
 	logData += bc.CurrentBlock().Header().Number.String() + ","

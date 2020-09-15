@@ -14,7 +14,7 @@ ORIGINALLOGPATH = 'imptData/impt_data_original_geth_block_process_time/impt_log_
 ORIGINALCSVPATH = ORIGINALLOGPATH + 'csv/'
 ORIGINALGRAPHPATH = ORIGINALLOGPATH + 'graph/'
 
-MAXBLOCKNUM = 10
+MAXBLOCKNUM = 500000
 
 # make empty 2d list -> list[b][a]
 def TwoD(a, b, isInt):

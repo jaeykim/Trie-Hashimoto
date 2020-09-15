@@ -15,7 +15,7 @@ PASSWORD = "1234"
 
 # Account number
 ACCOUNT_NUM = int(sys.argv[1])
-TX_PER_BLOCK = 100
+TX_PER_BLOCK = 200
 
 # providers
 fullnode = Web3(Web3.HTTPProvider("http://localhost:" + FULL_PORT))
@@ -53,7 +53,7 @@ def main():
             pass # just wait for mining
         fullnode.geth.miner.stop()  # stop mining
         currentBlock = fullnode.eth.blockNumber
-    
+
 
 
 
