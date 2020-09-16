@@ -205,6 +205,42 @@ func (tx *rpcTransaction) UnmarshalJSON(msg []byte) error {
 	return json.Unmarshal(msg, &tx.txExtraInfo)
 }
 
+func (ec *Client) TrieSizeByHash(ctx context.Context, hash common.Hash) (uint64, error) {
+	var size uint64
+	err := ec.c.CallContext(ctx, &size, "eth_getTrieSizeByHash", hash)
+	if err != nil {
+		return 0, err
+	}
+	return size, nil
+}
+
+func (ec *Client) TrieSizeByNumber(ctx context.Context, number *big.Int) (uint64, error) {
+	var size uint64
+	err := ec.c.CallContext(ctx, &size, "eth_getTrieSizeByNumber", toBlockNumArg(number))
+	if err != nil {
+		return 0, err
+	}
+	return size, nil
+}
+
+func (ec *Client) MiningTimeByHash(ctx context.Context, hash common.Hash) (uint64, error) {
+	var size uint64
+	err := ec.c.CallContext(ctx, &size, "eth_getMiningTimeByHash", hash)
+	if err != nil {
+		return 0, err
+	}
+	return size, nil
+}
+
+func (ec *Client) MiningTimeByNumber(ctx context.Context, number *big.Int) (uint64, error) {
+	var size uint64
+	err := ec.c.CallContext(ctx, &size, "eth_getMiningTimeByNumber", toBlockNumArg(number))
+	if err != nil {
+		return 0, err
+	}
+	return size, nil
+}
+
 // TransactionByHash returns the transaction with the given hash.
 func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *types.Transaction, isPending bool, err error) {
 	var json *rpcTransaction

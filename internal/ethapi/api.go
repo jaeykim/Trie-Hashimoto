@@ -44,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/tyler-smith/go-bip39"
 )
@@ -694,6 +695,42 @@ func (s *PublicBlockChainAPI) GetUncleCountByBlockHash(ctx context.Context, bloc
 	return nil
 }
 
+// GetUncleCountByBlockNumber returns number of uncles in the block for the given block number
+func (s *PublicBlockChainAPI) GetTrieSizeByNumber(ctx context.Context, blockNr rpc.BlockNumber) uint64 {
+	if block, _ := s.b.BlockByNumber(ctx, blockNr); block != nil {
+		size := trie.TrieSize(s.b.ChainDb(), (block.Header().Root)[:])
+		return size
+	}
+	return 0
+}
+
+// GetUncleCountByBlockNumber returns number of uncles in the block for the given block number
+func (s *PublicBlockChainAPI) GetTrieSizeByHash(ctx context.Context, blockHash common.Hash) uint64 {
+	if block, _ := s.b.GetBlock(ctx, blockHash); block != nil {
+		size := trie.TrieSize(s.b.ChainDb(), (block.Header().Root)[:])
+		return size
+	}
+	return 0
+}
+
+// GetUncleCountByBlockNumber returns number of uncles in the block for the given block number
+func (s *PublicBlockChainAPI) GetMiningTimeByNumber(ctx context.Context, blockNr rpc.BlockNumber) uint64 {
+	if block, _ := s.b.BlockByNumber(ctx, blockNr); block != nil {
+		size := trie.MiningTime(s.b.ChainDb(), (block.Header().Root)[:], block.Header().Number.Uint64())
+		return size
+	}
+	return 0
+}
+
+// GetUncleCountByBlockNumber returns number of uncles in the block for the given block number
+func (s *PublicBlockChainAPI) GetMiningTimeByHash(ctx context.Context, blockHash common.Hash) uint64 {
+	if block, _ := s.b.GetBlock(ctx, blockHash); block != nil {
+		size := trie.MiningTime(s.b.ChainDb(), (block.Header().Root)[:], block.Header().Number.Uint64())
+		return size
+	}
+	return 0
+}
+
 // GetCode returns the code stored at the given address in the state for the given block number.
 func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (hexutil.Bytes, error) {
 	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
@@ -957,7 +994,7 @@ func RPCMarshalBlock(b *types.Block, inclTx bool, fullTx bool) (map[string]inter
 		"timestamp":        hexutil.Uint64(head.Time),
 		"transactionsRoot": head.TxHash,
 		"receiptsRoot":     head.ReceiptHash,
-		//"trieNonces":		b.TrieNonces(),
+		"trieNonces":		b.TrieNonces(),
 	}
 
 	if inclTx {

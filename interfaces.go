@@ -58,6 +58,10 @@ type ChainReader interface {
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 	TransactionCount(ctx context.Context, blockHash common.Hash) (uint, error)
 	TransactionInBlock(ctx context.Context, blockHash common.Hash, index uint) (*types.Transaction, error)
+	TrieSizeByHash(ctx context.Context, hash common.Hash) (uint64, error)
+	TrieSizeByNumber(ctx context.Context, number *big.Int) (uint64, error)
+	MiningTimeByHash(ctx context.Context, hash common.Hash) (uint64, error)
+	MiningTimeByNumber(ctx context.Context, number *big.Int) (uint64, error)
 
 	// This method subscribes to notifications about changes of the head block of
 	// the canonical chain.

@@ -5226,6 +5226,14 @@ var uncleCountCall = function (args) {
     return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getUncleCountByBlockHash' : 'eth_getUncleCountByBlockNumber';
 };
 
+var trieSizeCall = function (args) {
+    return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? "eth_getTrieSizeByHash" : "eth_getTrieSizeByNumber";
+};
+
+var miningTimeCall = function (args) {
+    return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? "eth_getMiningTimeByHash" : "eth_getMiningTimeByNumber";
+};
+
 function Eth(web3) {
     this._requestManager = web3._requestManager;
 
@@ -5358,6 +5366,22 @@ var methods = function () {
         outputFormatter: utils.toDecimal
     });
 
+    var getTrieSize = new Method({
+        name: 'getTrieSize',
+        call: trieSizeCall,
+        params: 1,
+        inputFormatter: [formatters.inputBlockNumberFormatter],
+        outputFormatter: uint64
+    });
+
+    var getMiningTime = new Method({
+        name: 'getMiningTime',
+        call: miningTimeCall,
+        params: 1,
+        inputFormatter: [formatters.inputBlockNumberFormatter],
+        outputFormatter: uint64
+    });
+
     var sendRawTransaction = new Method({
         name: 'sendRawTransaction',
         call: 'eth_sendRawTransaction',
@@ -5444,6 +5468,8 @@ var methods = function () {
         getTransactionFromBlock,
         getTransactionReceipt,
         getTransactionCount,
+        getTrieSize,
+        getMiningTime,
         call,
         estimateGas,
         sendRawTransaction,

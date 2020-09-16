@@ -256,20 +256,9 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]uint64, i
 					hash = h.makeHashNode(h.tmp)
 					hash = modifyHash(n, hash, blockNum)
 				} else {
-					for ; ; nonce++ {
-						h.tmp.Reset()
-						n.setNonce(nonce)
-						if err := rlp.Encode(&h.tmp, n); err != nil {
-							panic("encode error: " + err.Error())
-						}
-						hash = h.makeHashNode(h.tmp)
-						// If the hash has the valid hash prefix, store the result
-						if validHashNode(hash, blockNum) {
-							break
-						}
-					}
+					hash = h.trieNodeMining(n, blockNum)
+					nonce = n.getNonce()
 				}
-				nonce = n.getNonce()
 				*trieNonces = append(*trieNonces, nonce)
 			} else if !isMining && dirty {
 				// Used for HashByNonce()
@@ -328,6 +317,23 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]uint64, i
 		}
 	}
 	return hash, nonce, nil
+}
+
+func (h *hasher) trieNodeMining(n node, blockNum uint64) (hashNode) {
+	nonce := uint64(0)
+	hash := hashNode{}
+	for ; ; nonce++ {
+		h.tmp.Reset()
+		n.setNonce(nonce)
+		if err := rlp.Encode(&h.tmp, n); err != nil {
+			panic("encode error: " + err.Error())
+		}
+		hash = h.makeHashNode(h.tmp)
+		// If the hash has the valid hash prefix, store the result
+		if validHashNode(hash, blockNum) {
+			return hash
+		}
+	}
 }
 
 func (h *hasher) makeHashNode(data []byte) hashNode {

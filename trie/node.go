@@ -23,9 +23,13 @@ import (
 	"math/big"
 	"reflect"
 	"encoding/binary"
+	"sync"
+	"runtime"
+	"time"
 	
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 var indices = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f", "[17]"}
@@ -337,6 +341,115 @@ func (n valueNode) size() common.StorageSize {
 	size := common.StorageSize(reflect.TypeOf(n).Size()) + common.StorageSize(cap(n))
 	//fmt.Println("valueNode, ", size, common.StorageSize(cap(n)))
 	return size
+}
+
+func TrieSize(db ethdb.KeyValueReader, buf []byte) uint64 {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+	//fmt.Println(runtime.GOMAXPROCS(0))
+	wait := new(sync.WaitGroup)
+	wait.Add(16)
+
+	data, _ := db.Get(buf)
+	size := uint64(len(buf) + len(data))
+	node := mustDecodeNode(buf, data)
+	var hash []byte
+	var childSize [16]uint64
+	n, _ := node.(*fullNode)
+	for i, child := range &n.Children {
+		if i < 16 {
+			hash, _ = child.(hashNode)
+			go trieSizePartial(db, hash, &childSize[i], wait)
+		}
+	}
+
+	wait.Wait()
+
+	for i := 0; i < 16; i++ {
+		fmt.Println(childSize[i])
+		size += childSize[i]
+	}
+	return size
+} 
+
+
+func trieSizePartial(db ethdb.KeyValueReader, buf []byte, size *uint64, w *sync.WaitGroup) {
+	defer w.Done()
+	*size = trieSize(db, buf)
+}
+
+func trieSize(db ethdb.KeyValueReader, buf []byte) uint64 {
+	data, _ := db.Get(buf)
+	if len(data) == 0 {
+		return 0
+	}
+	size := uint64(len(buf) + len(data))
+	node := mustDecodeNode(buf, data)
+	
+	switch n := node.(type) {
+	case *fullNode:
+		var hash []byte
+		for _, child := range &n.Children {
+			if child != nil {
+				hash, _ = child.(hashNode)
+				size += trieSize(db, hash)
+			}
+		}
+	case *shortNode:
+		switch val := n.Val.(type) {
+		case hashNode:
+			//fmt.Println("hash")
+			size += trieSize(db, val)
+		default:
+		}
+	default:
+		fmt.Println("gg")
+	}
+	return size
+}
+
+func MiningTime(db ethdb.KeyValueReader, buf []byte, blockNum uint64) uint64 {
+	h := newHasher(nil)
+	defer returnHasherToPool(h)
+	return h.miningTime(db, buf, blockNum)
+}
+
+func (h *hasher) miningTime(db ethdb.KeyValueReader, buf []byte, blockNum uint64) uint64 {
+	// If the trie node is not updated exactly at this block number, bypass it
+	if !validHashNode(buf, blockNum) {
+		return 0
+	}
+	// get the rlp encoded trie node data from LevelDB
+	data, _ := db.Get(buf)
+	if len(data) == 0 {
+		return 0
+	}
+
+	node := mustDecodeNode(buf, data)
+	startTime := time.Now()
+	_= h.trieNodeMining(node, blockNum) // simulateMining(node, blockNum)
+	elapsedMiningTime := uint64(time.Since(startTime).Milliseconds())
+
+	switch n := node.(type) {
+	case *fullNode:
+		var hash []byte
+		for _, child := range &n.Children {
+			if child != nil {
+				hash, _ = child.(hashNode)
+				elapsedMiningTime += h.miningTime(db, hash, blockNum)
+			}
+		}
+	case *shortNode:
+		switch val := n.Val.(type) {
+		case hashNode:
+			//fmt.Println("hash")
+			elapsedMiningTime += h.miningTime(db, val, blockNum)
+		default:
+		}
+	default:
+		fmt.Println("gg")
+	}
+
+	return elapsedMiningTime
 }
 
 // same struct copied from state_object.go to decode data
