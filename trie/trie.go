@@ -405,7 +405,7 @@ func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 // Hash returns the root hash of the trie. It does not write to the
 // database and can be used even if the trie doesn't have one.
 func (t *Trie) Hash() common.Hash {
-	hash, cached, _ := t.hashRoot(nil, nil, nil, false, 0)
+	hash, cached, _ := t.hashRoot(nil, nil, nil, false, 0, 0)
 	t.root = cached
 	return common.BytesToHash(hash.(hashNode))
 }
@@ -413,9 +413,9 @@ func (t *Trie) Hash() common.Hash {
 // HashWithNonce returns the root hash of the indexed MPT and the IMPT mining results.
 // It recursively does mining work for each state trie node and stores the mining results.
 // It does not write to the database and can be used even if the trie doesn't have one.
-func (t *Trie) HashWithNonce(blockNum uint64) (common.Hash, []uint64) {
+func (t *Trie) HashWithNonce(blockNum uint64, threads int) (common.Hash, []uint64) {
 	trieNonces := []uint64{}
-	hash, cached, _ := t.hashRoot(nil, nil, &trieNonces, true, blockNum)
+	hash, cached, _ := t.hashRoot(nil, nil, &trieNonces, true, blockNum, threads)
 	t.root = cached
 	return common.BytesToHash(hash.(hashNode)), trieNonces
 }
@@ -424,7 +424,7 @@ func (t *Trie) HashWithNonce(blockNum uint64) (common.Hash, []uint64) {
 // It modifies each state trie node of locals to the indexed one by miner.
 // It does not write to the database and can be used even if the trie doesn't have one.
 func (t *Trie) HashByNonce(trieNonces []uint64, blockNum uint64) common.Hash {
-	hash, cached, _ := t.hashRoot(nil, nil, &trieNonces, false, blockNum)
+	hash, cached, _ := t.hashRoot(nil, nil, &trieNonces, false, blockNum, 0)
 	t.root = cached
 	return common.BytesToHash(hash.(hashNode))
 }
@@ -436,8 +436,8 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 		panic("commit called on trie with nil database")
 	}
 	// Print the size of state trie
-	if t.root != nil { fmt.Println("trie size: ", t.TrieSize()) }
-	hash, cached, err := t.hashRoot(t.db, onleaf, nil, false, 0)
+	// if t.root != nil { fmt.Println("trie size: ", t.TrieSize()) }
+	hash, cached, err := t.hashRoot(t.db, onleaf, nil, false, 0, 0)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -445,14 +445,14 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	return common.BytesToHash(hash.(hashNode)), nil
 }
 
-func (t *Trie) hashRoot(db *Database, onleaf LeafCallback, trieNonces *[]uint64, isMining bool, blockNum uint64) (node, node, error) {
+func (t *Trie) hashRoot(db *Database, onleaf LeafCallback, trieNonces *[]uint64, isMining bool, blockNum uint64, threads int) (node, node, error) {
 	if t.root == nil {
 		return hashNode(emptyRoot.Bytes()), nil, nil
 	}
 	h := newHasher(onleaf)
 	defer returnHasherToPool(h)
 	var count = uint64(0)
-	return h.hash(t.root, db, true, trieNonces, isMining, blockNum, &count)
+	return h.hash(t.root, db, true, trieNonces, isMining, blockNum, threads, &count)
 }
 
 // TrieSize returns the total node size in the state trie (sjkim)

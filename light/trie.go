@@ -135,11 +135,11 @@ func (t *odrTrie) Hash() common.Hash {
 }
 
 
-func (t *odrTrie) HashWithNonce(blockNum uint64) (common.Hash, []uint64) {
+func (t *odrTrie) HashWithNonce(blockNum uint64, threads int) (common.Hash, []uint64) {
 	if t.trie == nil {
 		return t.id.Root, nil
 	}
-	return t.trie.HashWithNonce(blockNum)
+	return t.trie.HashWithNonce(blockNum, threads)
 }
 
 func (t *odrTrie) HashByNonce(trieNonces []uint64, blockNum uint64) common.Hash {

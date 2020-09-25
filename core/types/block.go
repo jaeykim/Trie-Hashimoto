@@ -401,10 +401,14 @@ func (b *Block) Hash() common.Hash {
 	return v
 }
 
+// ModifyRoot is called after stateRoot is found after IMPT mining
+// Updates stateRoot field
 func (b *Block) ModifyRoot(hash common.Hash) {
 	b.header.Root = hash
 }
 
+// ModifyBody is called after stateRoot is found after IMPT mining
+// Updates trieNonces field
 func (b *Block) ModifyBody(trieNonces []uint64) {
 	b.trieNonces = make([]uint64, len(trieNonces))
 	copy(b.trieNonces, trieNonces)

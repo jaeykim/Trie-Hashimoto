@@ -544,7 +544,7 @@ func (b *tableCompactionBuilder) revert() error {
 
 // write compaction log to the file (jmlee)
 func writeCompactionLog(log string) {
-	f, err := os.OpenFile("/home/jmlee/go/src/github.com/ethereum/go-ethereum/build/bin/experiment/impt_leveldb_compaction_log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile("./experiment/impt_leveldb_compaction_log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		fmt.Println("ERR:", err)
 		// log.Info("ERR", "err", err)

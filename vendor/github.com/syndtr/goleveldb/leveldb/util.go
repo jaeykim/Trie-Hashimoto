@@ -15,7 +15,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
-var LogFilePath = "/home/jmlee/go/src/github.com/ethereum/go-ethereum/build/bin/experiment/impt_log_files/impt_which_level.txt"
+var LogFilePath = "./experiment/impt_log_files/impt_which_level.txt"
 
 func shorten(str string) string {
 	if len(str) <= 8 {

@@ -17,14 +17,15 @@
 package trie
 
 import (
-	_"fmt"
 	"hash"
 	"sync"
 	"encoding/binary"
 	"bytes"
+	"math/rand"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -44,8 +45,8 @@ type keccakState interface {
 
 type sliceBuffer []byte
 
-var fakeIMPT bool = true
-var prefixLength int = 3
+var fakeIMPT bool = false
+var prefixLength int = 2
 
 func (b *sliceBuffer) Write(data []byte) (n int, err error) {
 	*b = append(*b, data...)
@@ -79,7 +80,7 @@ func returnHasherToPool(h *hasher) {
 
 // hash collapses a node down into a hash node, also returning a copy of the
 // original node initialized with the computed hash to replace the original one.
-func (h *hasher) hash(n node, db *Database, force bool, trieNonces *[]uint64, isMining bool, blockNum uint64, count *uint64) (node, node, error) {
+func (h *hasher) hash(n node, db *Database, force bool, trieNonces *[]uint64, isMining bool, blockNum uint64, threads int, count *uint64) (node, node, error) {
 	// If we're not storing the node, just hashing, use available cached data
 	if hash, dirty := n.cache(); hash != nil {
 		// Returns cached hash directly only when normal Hash() was called.
@@ -103,12 +104,12 @@ func (h *hasher) hash(n node, db *Database, force bool, trieNonces *[]uint64, is
 		}
 	}
 	// Trie not processed yet or needs storage, walk the children
-	collapsed, cached, err := h.hashChildren(n, db, trieNonces, isMining, blockNum, count)
+	collapsed, cached, err := h.hashChildren(n, db, trieNonces, isMining, blockNum, threads, count)
 	if err != nil {
 		// fmt.Println("hasher.hash() finished 4")
 		return hashNode{}, n, err
 	}
-	hashed, nonce, err := h.store(collapsed, db, force, trieNonces, isMining, blockNum, count)
+	hashed, nonce, err := h.store(collapsed, db, force, trieNonces, isMining, blockNum, threads, count)
 	if err != nil {
 		// fmt.Println("hasher.hash() finished 5")
 		return hashNode{}, n, err
@@ -141,7 +142,7 @@ func (h *hasher) hash(n node, db *Database, force bool, trieNonces *[]uint64, is
 // hashChildren replaces the children of a node with their hashes if the encoded
 // size of the child is larger than a hash, returning the collapsed node as well
 // as a replacement for the original node with the child hashes cached in.
-func (h *hasher) hashChildren(original node, db *Database, trieNonces *[]uint64, isMining bool, blockNum uint64, count *uint64) (node, node, error) {
+func (h *hasher) hashChildren(original node, db *Database, trieNonces *[]uint64, isMining bool, blockNum uint64, threads int, count *uint64) (node, node, error) {
 	var err error
 
 	switch n := original.(type) {
@@ -152,7 +153,7 @@ func (h *hasher) hashChildren(original node, db *Database, trieNonces *[]uint64,
 		cached.Key = common.CopyBytes(n.Key)
 
 		if _, ok := n.Val.(valueNode); !ok {
-			collapsed.Val, cached.Val, err = h.hash(n.Val, db, false, trieNonces, isMining, blockNum, count)
+			collapsed.Val, cached.Val, err = h.hash(n.Val, db, false, trieNonces, isMining, blockNum, threads, count)
 			if err != nil {
 				return original, original, err
 			}
@@ -165,7 +166,7 @@ func (h *hasher) hashChildren(original node, db *Database, trieNonces *[]uint64,
 
 		for i := 0; i < 16; i++ {
 			if n.Children[i] != nil {
-				collapsed.Children[i], cached.Children[i], err = h.hash(n.Children[i], db, false, trieNonces, isMining, blockNum, count)
+				collapsed.Children[i], cached.Children[i], err = h.hash(n.Children[i], db, false, trieNonces, isMining, blockNum, threads, count)
 				if err != nil {
 					return original, original, err
 				}
@@ -183,7 +184,7 @@ func (h *hasher) hashChildren(original node, db *Database, trieNonces *[]uint64,
 // store hashes the node n and if we have a storage layer specified, it writes
 // the key/value pair to it and tracks any node->child references as well as any
 // node->external trie references.
-func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]uint64, isMining bool, blockNum uint64, count *uint64) (node, uint64, error) {
+func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]uint64, isMining bool, blockNum uint64, threads int, count *uint64) (node, uint64, error) {
 	// Don't store hashes or empty nodes.
 	if _, isHash := n.(hashNode); n == nil || isHash {
 		//fmt.Println("hasher.store End 1")
@@ -256,8 +257,16 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]uint64, i
 					hash = h.makeHashNode(h.tmp)
 					hash = modifyHash(n, hash, blockNum)
 				} else {
-					hash = h.trieNodeMining(n, blockNum)
-					nonce = n.getNonce()
+					nonce = trieNodeMining(n, blockNum, threads)
+					h.tmp.Reset()
+					n.setNonce(nonce)
+					if err := rlp.Encode(&h.tmp, n); err != nil {
+						panic("encode error: " + err.Error())
+					}
+					hash = h.makeHashNode(h.tmp)
+					if !validHash(hash, blockNum) {
+						panic("HashWithNonce error")
+					}	
 				}
 				*trieNonces = append(*trieNonces, nonce)
 			} else if !isMining && dirty {
@@ -276,8 +285,9 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]uint64, i
 						panic("encode error: " + err.Error())
 					}
 					hash = h.makeHashNode(h.tmp)
-					// Panic if it generates different hashNode or the hash is not valid
-					if !validHashNode(hash, blockNum) {
+					// Panic if the hash is not valid
+					if !validHash(hash, blockNum) {
+						//fmt.Println(nonce)
 						panic("HashByNonce error")
 					}					
 				}
@@ -319,21 +329,100 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]uint64, i
 	return hash, nonce, nil
 }
 
-func (h *hasher) trieNodeMining(n node, blockNum uint64) (hashNode) {
-	nonce := uint64(0)
-	hash := hashNode{}
-	for ; ; nonce++ {
-		h.tmp.Reset()
-		n.setNonce(nonce)
-		if err := rlp.Encode(&h.tmp, n); err != nil {
-			panic("encode error: " + err.Error())
-		}
-		hash = h.makeHashNode(h.tmp)
-		// If the hash has the valid hash prefix, store the result
-		if validHashNode(hash, blockNum) {
-			return hash
+func trieNodeMining(n node, blockNum uint64, threads int) uint64 {
+	var (
+		pend   sync.WaitGroup
+		abort = make(chan struct{})
+		locals = make(chan uint64)
+		result uint64
+	)
+	logger := log.New("miner_impt", -1)
+	logger.Trace("trieNodeMining started", "number", blockNum, "threads", threads)
+	for i := 0; i < threads; i++ {
+		pend.Add(1)
+		go func(id int, nonce uint64) {
+			defer pend.Done()
+			var copyNode node
+			switch n := n.(type) {
+			case *shortNode:
+				copyNode = n.copy()
+			case *fullNode:
+				copyNode = n.copy()
+			}
+			imptMine(copyNode, id, blockNum, nonce, abort, locals)
+		}(i, rand.Uint64())
+	}
+	
+search:
+	for {
+		select {
+		case result = <-locals:
+			// One of the threads found a block, abort all others
+			logger.Trace("trieNodeMining finished", "number", blockNum, "nonce", result)
+			close(abort)
+			break search
+		default:
 		}
 	}
+	// Wait until sealing is terminated or a nonce is found
+	pend.Wait()
+
+	return result
+}
+
+func imptMine(n node, id int, blockNum uint64, seed uint64, abort chan struct{}, found chan uint64) {
+	var (
+		attempts = int64(0)
+		nonce    = seed
+	)
+	logger := log.New("miner_impt", id)
+	logger.Trace("Started IMPT search for new nonces", "seed", seed)
+	hash := hashNode{}
+
+	h := newHasher(nil)
+	defer returnHasherToPool(h)
+search:
+	for {
+		select {
+		case <-abort:
+			// Mining terminated, update stats and abort
+			logger.Trace("IMPT nonce search aborted", "attempts", nonce-seed)
+			//ethash.hashrate.Mark(attempts)
+			break search
+
+		default:
+			// We don't have to update hash rate on every nonce, so update after after 2^X nonces
+			attempts++
+			/*
+			if (attempts % (1 << 15)) == 0 {
+				ethash.hashrate.Mark(attempts)
+				attempts = 0
+			}
+			*/
+			// Compute the PoW value of this nonce
+			h.tmp.Reset()
+			n.setNonce(nonce)
+			if err := rlp.Encode(&h.tmp, n); err != nil {
+				panic("encode error: " + err.Error())
+			}
+			hash = h.makeHashNode(h.tmp)
+
+			// Correct nonce found
+			if validHash(hash, blockNum) {
+				// return nonce
+				select {
+				// Include IMPT mining result in the sealed block body
+				case found <- nonce:
+					logger.Trace("IMPT nonce found and reported", "attempts", nonce-seed, "nonce", nonce)
+				case <-abort:
+					logger.Trace("IMPT nonce found but discarded", "attempts", nonce-seed, "nonce", nonce)
+				}
+				break search
+			}
+			nonce++
+		}
+	}
+	return
 }
 
 func (h *hasher) makeHashNode(data []byte) hashNode {
@@ -344,12 +433,13 @@ func (h *hasher) makeHashNode(data []byte) hashNode {
 	return n
 }
 
-// validHashNode returns whether the node hash has a valid prefix or not.
+// validHash returns whether the node hash has a valid prefix or not.
 // It returns true if the hash prefix is equal to the block number.
-func validHashNode(hash []byte, blockNum uint64) bool {
+func validHash(hash []byte, blockNum uint64) bool {
 	bs := make([]byte, 8)
     binary.BigEndian.PutUint64(bs, blockNum)
 	return bytes.Equal(hash[:prefixLength], bs[8-prefixLength:])
+	//return bytes.Equal(hash[1:3], bs[6:])
 }
 
 // modifyHash returns a new hashNode without finding proper nonce

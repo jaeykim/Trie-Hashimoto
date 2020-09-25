@@ -162,8 +162,8 @@ func (t *SecureTrie) Hash() common.Hash {
 }
 
 
-func (t *SecureTrie) HashWithNonce(blockNum uint64) (common.Hash, []uint64) {
-	return t.trie.HashWithNonce(blockNum)
+func (t *SecureTrie) HashWithNonce(blockNum uint64, threads int) (common.Hash, []uint64) {
+	return t.trie.HashWithNonce(blockNum, threads)
 }
 
 func (t *SecureTrie) HashByNonce(trieNonces []uint64, blockNum uint64) common.Hash {

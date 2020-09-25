@@ -80,7 +80,7 @@ type Trie interface {
 
 	// HashWithNonce returns the root hash of the trie with the mining work result. 
 	// It does not write to the database and can be used even if the trie doesn't have one.
-	HashWithNonce(uint64) (common.Hash, []uint64)
+	HashWithNonce(uint64, int) (common.Hash, []uint64)
 	
 	// HashByNonce returns the root hash of the trie updated by previously mined work.
 	// It does not write to the database and can be used even if the trie doesn't have one.

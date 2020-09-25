@@ -101,6 +101,20 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 	if ethash.workCh != nil {
 		ethash.workCh <- &sealTask{block: block, results: results}
 	}
+
+	if impt {
+		// Do IMPT mining for state trie nodes
+		// HashWithNonce()
+		trie := state.Trie()
+		number := block.Header().Number.Uint64()
+		trieHash, trieNonces := (*trie).HashWithNonce(number, threads)
+		
+		// Update block header's stateRoot field after IMPT mining
+		block.ModifyRoot(trieHash)
+		// Update block body's trieNonces field after IMPT mining
+		block.ModifyBody(trieNonces)
+	}
+	
 	var (
 		pend   sync.WaitGroup
 		locals = make(chan *types.Block)
@@ -109,7 +123,7 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 		pend.Add(1)
 		go func(id int, nonce uint64) {
 			defer pend.Done()
-			ethash.mine(block, state, id, nonce, abort, locals, impt)
+			ethash.mine(block, state, id, nonce, abort, locals)
 		}(i, uint64(ethash.rand.Int63()))
 	}
 	// Wait until sealing is terminated or a nonce is found
@@ -142,7 +156,7 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 
 // mine is the actual proof-of-work miner that searches for a nonce starting from
 // seed that results in correct final block difficulty.
-func (ethash *Ethash) mine(block *types.Block, state *state.StateDB, id int, seed uint64, abort chan struct{}, found chan *types.Block, impt bool) {
+func (ethash *Ethash) mine(block *types.Block, state *state.StateDB, id int, seed uint64, abort chan struct{}, found chan *types.Block) {
 	// Extract some data from the header
 	var (
 		header  = block.Header()
@@ -155,11 +169,6 @@ func (ethash *Ethash) mine(block *types.Block, state *state.StateDB, id int, see
 	var (
 		attempts = int64(0)
 		nonce    = seed
-		minedIMPT = false	// Start PoW after IMPT mining
-		trieHash common.Hash
-		trieNonces []uint64
-		startTime time.Time
-		elapsedTime time.Duration
 	)
 	logger := log.New("miner", id)
 	logger.Trace("Started ethash search for new nonces", "seed", seed)
@@ -173,22 +182,6 @@ search:
 			break search
 
 		default:
-			if impt && !minedIMPT {
-				// Do IMPT mining
-				// HashWithNonce actually does mining work for trie nodes
-				startTime = time.Now()
-				trie := state.Trie()
-				trieHash, trieNonces = (*trie).HashWithNonce(number)
-				
-				// Update block header's Root field after IMPT mining
-				block.ModifyRoot(trieHash)
-				header = block.Header()
-				hash = ethash.SealHash(header).Bytes()
-
-				elapsedTime = time.Since(startTime)
-				minedIMPT = true
-			}
-
 			// We don't have to update hash rate on every nonce, so update after after 2^X nonces
 			attempts++
 			if (attempts % (1 << 15)) == 0 {
@@ -206,8 +199,7 @@ search:
 				// Seal and return a block (if still needed)
 				select {
 				// Include IMPT mining result in the sealed block body
-				case found <- block.WithSeal(header).WithBody(block.Transactions(), block.Uncles(), trieNonces):
-					
+				case found <- block.WithSeal(header).WithBody(block.Transactions(), block.Uncles(), block.TrieNonces()):
 					if isLogging && (header.Number.Uint64() % loggingPeriod == 0) {
 						fpLog, err := os.OpenFile("./experiment/impt_sealer.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 						if err != nil {
@@ -216,9 +208,8 @@ search:
 						defer fpLog.Close()
 
 						impt_log.SetOutput(fpLog)
-						impt_log.Println("Block #:", header.Number.Uint64(), ", # of indexed nodes:", len(trieNonces), ", elapsed time:", elapsedTime.Seconds())
+						impt_log.Println("Block #:", header.Number.Uint64(), ", # of indexed nodes:", len(block.TrieNonces()))
 					}
-
 					logger.Trace("Ethash nonce found and reported", "attempts", nonce-seed, "nonce", nonce)
 				case <-abort:
 					logger.Trace("Ethash nonce found but discarded", "attempts", nonce-seed, "nonce", nonce)

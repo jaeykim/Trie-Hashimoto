@@ -415,7 +415,7 @@ func MiningTime(db ethdb.KeyValueReader, buf []byte, blockNum uint64) uint64 {
 
 func (h *hasher) miningTime(db ethdb.KeyValueReader, buf []byte, blockNum uint64) uint64 {
 	// If the trie node is not updated exactly at this block number, bypass it
-	if !validHashNode(buf, blockNum) {
+	if !validHash(buf, blockNum) {
 		return 0
 	}
 	// get the rlp encoded trie node data from LevelDB
@@ -426,8 +426,8 @@ func (h *hasher) miningTime(db ethdb.KeyValueReader, buf []byte, blockNum uint64
 
 	node := mustDecodeNode(buf, data)
 	startTime := time.Now()
-	_= h.trieNodeMining(node, blockNum) // simulateMining(node, blockNum)
-	elapsedMiningTime := uint64(time.Since(startTime).Milliseconds())
+	_ = trieNodeMining(node, blockNum, 1) // simulateMining(node, blockNum)
+	elapsedMiningTime := uint64(time.Since(startTime).Nanoseconds())
 
 	switch n := node.(type) {
 	case *fullNode:
