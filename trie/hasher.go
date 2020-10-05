@@ -46,7 +46,7 @@ type keccakState interface {
 type sliceBuffer []byte
 
 var fakeIMPT bool = false
-var prefixLength int = 2
+var prefixLength int = 3
 
 func (b *sliceBuffer) Write(data []byte) (n int, err error) {
 	*b = append(*b, data...)
@@ -286,7 +286,7 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]uint64, i
 					}
 					hash = h.makeHashNode(h.tmp)
 					// Panic if the hash is not valid
-					if !validHash(hash, blockNum) {
+					if !validHash(hash, blockNum) && blockNum != 0 {
 						//fmt.Println(nonce)
 						panic("HashByNonce error")
 					}					

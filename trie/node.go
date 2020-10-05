@@ -407,17 +407,12 @@ func trieSize(db ethdb.KeyValueReader, buf []byte) uint64 {
 	return size
 }
 
-func MiningTime(db ethdb.KeyValueReader, buf []byte, blockNum uint64) uint64 {
-	h := newHasher(nil)
-	defer returnHasherToPool(h)
-	return h.miningTime(db, buf, blockNum)
+func MiningTime(db ethdb.KeyValueReader, buf []byte, blockNum uint64, threads int) uint64 {
+	return miningTime(db, buf, blockNum, threads)
 }
 
-func (h *hasher) miningTime(db ethdb.KeyValueReader, buf []byte, blockNum uint64) uint64 {
+func miningTime(db ethdb.KeyValueReader, buf []byte, blockNum uint64, threads int) uint64 {
 	// If the trie node is not updated exactly at this block number, bypass it
-	if !validHash(buf, blockNum) {
-		return 0
-	}
 	// get the rlp encoded trie node data from LevelDB
 	data, _ := db.Get(buf)
 	if len(data) == 0 {
@@ -426,7 +421,7 @@ func (h *hasher) miningTime(db ethdb.KeyValueReader, buf []byte, blockNum uint64
 
 	node := mustDecodeNode(buf, data)
 	startTime := time.Now()
-	_ = trieNodeMining(node, blockNum, 1) // simulateMining(node, blockNum)
+	_ = trieNodeMining(node, blockNum, threads) // simulateMining(node, blockNum)
 	elapsedMiningTime := uint64(time.Since(startTime).Nanoseconds())
 
 	switch n := node.(type) {
@@ -435,14 +430,14 @@ func (h *hasher) miningTime(db ethdb.KeyValueReader, buf []byte, blockNum uint64
 		for _, child := range &n.Children {
 			if child != nil {
 				hash, _ = child.(hashNode)
-				elapsedMiningTime += h.miningTime(db, hash, blockNum)
+				if validHash(hash, blockNum) { elapsedMiningTime += miningTime(db, hash, blockNum, threads); }
 			}
 		}
 	case *shortNode:
 		switch val := n.Val.(type) {
 		case hashNode:
 			//fmt.Println("hash")
-			elapsedMiningTime += h.miningTime(db, val, blockNum)
+			if validHash(val, blockNum) { elapsedMiningTime += miningTime(db, val, blockNum, threads); }
 		default:
 		}
 	default:

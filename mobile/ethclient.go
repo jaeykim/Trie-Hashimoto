@@ -44,12 +44,12 @@ func (ec *EthereumClient) GetTrieSizeByNumber(ctx context.Context, number int64)
 	return ec.client.TrieSizeByNumber(ctx.context, big.NewInt(number))
 }
 
-func (ec *EthereumClient) GetMiningTimeByHash(ctx context.Context, hash common.Hash) (uint64, error) {
-	return ec.client.MiningTimeByHash(ctx.context, hash.hash)
+func (ec *EthereumClient) GetMiningTimeByHash(ctx context.Context, hash common.Hash, threads int) (uint64, error) {
+	return ec.client.MiningTimeByHash(ctx.context, hash.hash, threads)
 }
 
-func (ec *EthereumClient) GetMiningTimeByNumber(ctx context.Context, number int64) (uint64, error) {
-	return ec.client.MiningTimeByNumber(ctx.context, big.NewInt(number))
+func (ec *EthereumClient) GetMiningTimeByNumber(ctx context.Context, number int64, threads int) (uint64, error) {
+	return ec.client.MiningTimeByNumber(ctx.context, big.NewInt(number), threads)
 }
 // GetBlockByHash returns the given full block.
 func (ec *EthereumClient) GetBlockByHash(ctx *Context, hash *Hash) (block *Block, _ error) {

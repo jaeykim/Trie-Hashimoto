@@ -5377,8 +5377,8 @@ var methods = function () {
     var getMiningTime = new Method({
         name: 'getMiningTime',
         call: miningTimeCall,
-        params: 1,
-        inputFormatter: [formatters.inputBlockNumberFormatter],
+        params: 2,
+        inputFormatter: [formatters.inputBlockNumberFormatter, int],
         outputFormatter: uint64
     });
 

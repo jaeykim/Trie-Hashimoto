@@ -714,18 +714,18 @@ func (s *PublicBlockChainAPI) GetTrieSizeByHash(ctx context.Context, blockHash c
 }
 
 // GetUncleCountByBlockNumber returns number of uncles in the block for the given block number
-func (s *PublicBlockChainAPI) GetMiningTimeByNumber(ctx context.Context, blockNr rpc.BlockNumber) uint64 {
+func (s *PublicBlockChainAPI) GetMiningTimeByNumber(ctx context.Context, blockNr rpc.BlockNumber, threads int) uint64 {
 	if block, _ := s.b.BlockByNumber(ctx, blockNr); block != nil {
-		size := trie.MiningTime(s.b.ChainDb(), (block.Header().Root)[:], block.Header().Number.Uint64())
+		size := trie.MiningTime(s.b.ChainDb(), (block.Header().Root)[:], block.Header().Number.Uint64(), threads)
 		return size
 	}
 	return 0
 }
 
 // GetUncleCountByBlockNumber returns number of uncles in the block for the given block number
-func (s *PublicBlockChainAPI) GetMiningTimeByHash(ctx context.Context, blockHash common.Hash) uint64 {
+func (s *PublicBlockChainAPI) GetMiningTimeByHash(ctx context.Context, blockHash common.Hash, threads int) uint64 {
 	if block, _ := s.b.GetBlock(ctx, blockHash); block != nil {
-		size := trie.MiningTime(s.b.ChainDb(), (block.Header().Root)[:], block.Header().Number.Uint64())
+		size := trie.MiningTime(s.b.ChainDb(), (block.Header().Root)[:], block.Header().Number.Uint64(), threads)
 		return size
 	}
 	return 0

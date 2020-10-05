@@ -516,8 +516,8 @@ web3._extend({
 			call: function(args) {
 				return (web3._extend.utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getMiningTimeByHash' : 'eth_getMiningTimeByNumber';
 			},
-			params: 1,
-			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter],
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, web3._extend.int],
 			outputFormatter: web3._extend.uint64
 		}),
 	],

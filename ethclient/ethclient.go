@@ -223,18 +223,18 @@ func (ec *Client) TrieSizeByNumber(ctx context.Context, number *big.Int) (uint64
 	return size, nil
 }
 
-func (ec *Client) MiningTimeByHash(ctx context.Context, hash common.Hash) (uint64, error) {
+func (ec *Client) MiningTimeByHash(ctx context.Context, hash common.Hash, threads int) (uint64, error) {
 	var size uint64
-	err := ec.c.CallContext(ctx, &size, "eth_getMiningTimeByHash", hash)
+	err := ec.c.CallContext(ctx, &size, "eth_getMiningTimeByHash", hash, threads)
 	if err != nil {
 		return 0, err
 	}
 	return size, nil
 }
 
-func (ec *Client) MiningTimeByNumber(ctx context.Context, number *big.Int) (uint64, error) {
+func (ec *Client) MiningTimeByNumber(ctx context.Context, number *big.Int, threads int) (uint64, error) {
 	var size uint64
-	err := ec.c.CallContext(ctx, &size, "eth_getMiningTimeByNumber", toBlockNumArg(number))
+	err := ec.c.CallContext(ctx, &size, "eth_getMiningTimeByNumber", toBlockNumArg(number), threads)
 	if err != nil {
 		return 0, err
 	}
