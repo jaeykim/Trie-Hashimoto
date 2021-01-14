@@ -19,11 +19,15 @@ package trie
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
+
+// overhead of correctly prefixing for fake IMPT data (nanoseconds)
+var TotalPrefixingOverhead uint64 = 0
 
 // ErrNotRequested is returned by the trie sync when it's requested to process a
 // node it did not request.
@@ -77,6 +81,10 @@ type Sync struct {
 	requests map[common.Hash]*request // Pending requests pertaining to a key hash
 	queue    *prque.Prque             // Priority queue with the pending requests
 	bloom    *SyncBloom               // Bloom filter for fast node existence checks
+
+	// s.hashes[fakeHash_withoutBlockNumberPrefix] = fakeHash (this is for fast sync with fake Trie-Hashimoto data) (jmlee)
+	// (this is not necessary with real Trie-Hashimoto data which has really PoW-mined trie nodes)
+	hashes	map[string]common.Hash
 }
 
 // NewSync creates a new trie data download scheduler.
@@ -87,6 +95,7 @@ func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallb
 		requests: make(map[common.Hash]*request),
 		queue:    prque.New(nil),
 		bloom:    bloom,
+		hashes: make(map[string]common.Hash),
 	}
 	ts.AddSubTrie(root, 0, common.Hash{}, callback)
 	return ts
@@ -256,6 +265,15 @@ func (s *Sync) schedule(req *request) {
 	// Schedule the request for future retrieval
 	s.queue.Push(req.hash, int64(req.depth))
 	s.requests[req.hash] = req
+
+	// insert hash info for syncing with fake TH data (jmlee)
+	startTime := time.Now()
+	prefixLen := PrefixLength*2 + 2 // = blockNumberLen + "0x"
+	hashWithoutPrefix := string([]rune(req.hash.Hex())[prefixLen:])
+	s.hashes[hashWithoutPrefix] = req.hash
+	elapsedTime := time.Since(startTime)
+	TotalPrefixingOverhead += uint64(elapsedTime.Nanoseconds())
+	// fmt.Println("hashWithoutPrefix:", hashWithoutPrefix, "/ fakeHash:", req.hash.Hex())
 }
 
 // children retrieves all the missing children of a state trie entry for future
@@ -334,6 +352,14 @@ func (s *Sync) commit(req *request) (err error) {
 
 	delete(s.requests, req.hash)
 
+	// delete hash info for syncing with fake TH data (jmlee)
+	startTime := time.Now()
+	prefixLen := PrefixLength*2 + 2 // = blockNumberLen + "0x"
+	hashWithoutPrefix := string([]rune(req.hash.Hex())[prefixLen:])
+	delete(s.hashes, hashWithoutPrefix)
+	elapsedTime := time.Since(startTime)
+	TotalPrefixingOverhead += uint64(elapsedTime.Nanoseconds())
+
 	// Check all parents for completion
 	for _, parent := range req.parents {
 		parent.deps--
@@ -344,4 +370,20 @@ func (s *Sync) commit(req *request) (err error) {
 		}
 	}
 	return nil
+}
+
+// forcely change trie node's hash value for syncing with fake TH data (jmlee)
+func (s *Sync) PrefixingTrieNodeHash(resHash *common.Hash) {
+	
+	prefixLen := PrefixLength*2 + 2 // = blockNumberLen + "0x"
+	subRune1 := []rune(resHash.Hex())
+	subStr1 := string(subRune1[prefixLen:])
+
+	if fakeHash, ok := s.hashes[subStr1]; ok {
+		// fmt.Println("matched!")
+		// fmt.Println("resHash:", resHash.Hex(), "/ fakeHash:", fakeHash.Hex())
+		*resHash = fakeHash
+		return
+	}
+	
 }
