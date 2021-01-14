@@ -11,7 +11,7 @@ import socket
 import os
 import time
 
-# Fullnode Settings (addr: "147.46.115.21" / "localhost")
+# Fullnode Settings
 FULL_ADDR = "localhost"
 FULL_PORT = "8081"
 FULL_READY_PORT = "8091"
