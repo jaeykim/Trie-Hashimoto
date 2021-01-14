@@ -29,6 +29,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -671,7 +672,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 	// fmt.Println("logData:", logData)
 	logData += "@\n"
 	// fmt.Println(logData)
-	common.LogToFile("impt_data_log.txt", logData)
+	// common.LogToFile("impt_data_log.txt", logData)
 
 	// increase NextBlockNumber (to prefixing impt trie node hash) (jmlee)
 	common.NextBlockNumber++
@@ -737,6 +738,73 @@ func (bc *BlockChain) insert(block *types.Block) {
 	// 	// fmt.Println("	value: ", it.Value())
 	// 	// fmt.Println()
 	// }
+
+	// [TH] hardcoded to set fast sync boundary (jmlee)
+	if block.Number().Uint64() >= common.SyncBoundary {	
+		log.Info("Sync Finished")
+		fmt.Println("TotalPrefixingOverhead:", trie.TotalPrefixingOverhead, "ns -> (", trie.TotalPrefixingOverhead/1000000000, " sec)")
+
+		// check data type (GETH or TH)
+		prefixLen := trie.PrefixLength*2 + 2 // = blockNumberLen + "0x"
+		subRune1 := []rune(block.Header().Root.Hex())
+		subStr1 := string(subRune1[2:prefixLen])
+		fmt.Println(subStr1)
+
+		hashNum, _ := strconv.ParseUint(subStr1, 16, 64)
+		hashNum = uint64(hashNum)
+
+		fmt.Println(block.Number().Uint64(), " / ", hashNum)
+		fileName := ""
+		dbLogFileName := ""
+		if block.Number().Uint64() == hashNum {
+			fmt.Println("this is IMPT data")
+			fileName = "overheads_TH_" + common.SyncMode + "_" + block.Number().String() + ".txt"
+			dbLogFileName = "TH_" + common.SyncMode + "_" + block.Number().String() + ".txt"
+		} else {
+			fmt.Println("this is original geth data")
+			fileName = "overheads_GETH_" + common.SyncMode + "_" + block.Number().String() + ".txt"
+			dbLogFileName = "GETH_" + common.SyncMode + "_" + block.Number().String() + ".txt"
+		}
+
+		// save database inspect result
+		dbLogFileDir := "./dbInspectResults/"
+		if _, err := os.Stat(dbLogFileDir + dbLogFileName); os.IsNotExist(err) {
+			fmt.Println("File definitely does not exist.")
+			inspectResult := rawdb.InspectDatabaseGetResult(rawdb.GlobalDB) // KiB bytes log
+			f, err := os.OpenFile(dbLogFileDir+dbLogFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				log.Info("ERR", "err", err)
+			}
+			fmt.Fprintln(f, inspectResult)
+			f.Close()
+		} else {
+			fmt.Println("db inspect result log already exist. skip inspecting")
+		}
+
+		// check sync mode
+		// 근데 사실 full sync 면 overhead가 그냥 0임
+		fmt.Println("this is", common.SyncMode, "sync mode")
+
+		// log to the file
+		LogFilePath := "./syncTimeLogs/"
+		f, err := os.OpenFile(LogFilePath+fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Info("ERR", "err", err)
+		}
+		logData := strconv.FormatUint(trie.TotalPrefixingOverhead/1000000000, 10)
+		if common.IsRolledBack {
+			fmt.Println("roll back occured")
+			logData += ",rolledBack"
+		} else {
+			fmt.Println("roll back not occured")
+			logData += ",notRolledBack"
+		}
+		fmt.Fprintln(f, logData)
+		f.Close()
+
+		// terminate program
+		os.Exit(1)
+	}
 
 }
 
