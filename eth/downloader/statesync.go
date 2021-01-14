@@ -467,11 +467,23 @@ func (s *stateSync) process(req *stateReq) (int, error) {
 // processNodeData tries to inject a trie node data blob delivered from a remote
 // peer into the state trie, returning whether anything useful was written or any
 // error occurred.
+var cnt uint64 = 0
 func (s *stateSync) processNodeData(blob []byte) (bool, common.Hash, error) {
 	res := trie.SyncResult{Data: blob}
 	s.keccak.Reset()
 	s.keccak.Write(blob)
 	s.keccak.Sum(res.Hash[:0])
+
+	// forcely change trie node hash value for syncing with fake TH data (this enables fast-sync with fake TH data) (jmlee)
+	startTime := time.Now()
+	s.sched.PrefixingTrieNodeHash(&res.Hash)
+	elapsedTime := time.Since(startTime)
+	trie.TotalPrefixingOverhead += uint64(elapsedTime.Nanoseconds())
+	cnt++
+	if cnt%10000 == 0 {
+		fmt.Println("\nelapsed time for hash changing:", int(elapsedTime.Nanoseconds()), "nanoseconds --> total", trie.TotalPrefixingOverhead/1000000000, "seconds\n")
+	}
+
 	committed, _, err := s.sched.Process([]trie.SyncResult{res})
 	return committed, res.Hash, err
 }
