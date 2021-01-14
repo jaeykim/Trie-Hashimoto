@@ -23,9 +23,9 @@ import (
 	"io"
 	"math/big"
 	mrand "math/rand"
-	"os/exec"
+	// "os/exec"
 	"strconv"
-	"strings"
+	// "strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -631,13 +631,13 @@ func (bc *BlockChain) insert(block *types.Block) {
 	}
 
 	// print & log database inspecting result per size check epoch
-	if block.Number().Uint64()%common.InspectingDatabaseEpoch == 0 {
-		result := rawdb.InspectDatabaseGetResult(rawdb.GlobalDB) // KiB bytes log
-		common.LogToFile("impt_database_inspect.txt", result)
-	}
+	// if block.Number().Uint64()%common.InspectingDatabaseEpoch == 0 {
+	// 	result := rawdb.InspectDatabaseGetResult(rawdb.GlobalDB) // KiB bytes log
+	// 	common.LogToFile("impt_database_inspect.txt", result)
+	// }
 
 	// print blocknum & leveldbs size for impt data log
-	dbPath := "/home/jmlee/ssd/original_geth/db_full/geth/" // path for original geth
+	/*dbPath := "/home/jmlee/ssd/original_geth/db_full/geth/" // path for original geth
 	// dbPath := "/home/jmlee/data/impt/db_full/geth/"	// path for impt geth
 	logData := ""
 	// fmt.Println("block", bc.CurrentBlock().Header().Number, "is inseted")
@@ -672,13 +672,13 @@ func (bc *BlockChain) insert(block *types.Block) {
 	// fmt.Println("logData:", logData)
 	logData += "@\n"
 	// fmt.Println(logData)
-	// common.LogToFile("impt_data_log.txt", logData)
+	// common.LogToFile("impt_data_log.txt", logData)*/
 
 	// increase NextBlockNumber (to prefixing impt trie node hash) (jmlee)
 	common.NextBlockNumber++
 
 	// inspect leveldb stats
-	logData = "leveldbInfo\n" // lists with -> level,tables,size(MB),time(sec),read(MB),write(MB)
+	/*logData = "leveldbInfo\n" // lists with -> level,tables,size(MB),time(sec),read(MB),write(MB)
 
 	// log for total db
 	totalDBStat, _ := bc.db.Stat("leveldb.impt")
@@ -693,18 +693,18 @@ func (bc *BlockChain) insert(block *types.Block) {
 	logData += "inserted block " + bc.CurrentBlock().Header().Number.String() + " ------------------------------\n"
 	// fmt.Fprintln(f, logData)
 	// f.Close()
-	common.LogToFile("impt_leveldb_compaction_log.txt", logData)
+	common.LogToFile("impt_leveldb_compaction_log.txt", logData)*/
 
 	// log for which level info
-	logData = "inserted block " + bc.CurrentBlock().Header().Number.String() + "\n"
-	common.LogToFile("impt_which_level.txt", logData)
+	/*logData = "inserted block " + bc.CurrentBlock().Header().Number.String() + "\n"
+	common.LogToFile("impt_which_level.txt", logData)*/
 
 	// log for dirty trie node count
-	trieNonces := bc.CurrentBlock().TrieNonces()
+	/*trieNonces := bc.CurrentBlock().TrieNonces()
 	logData = "dirtes:" + strconv.Itoa(len(trieNonces)) + ":\n"
 	timeStamp := time.Now().UnixNano()
 	logData += "inserted block:" + bc.CurrentBlock().Header().Number.String() + ":" + strconv.FormatInt(timeStamp, 10) + ":\n"
-	common.LogToFile("impt_block_process_time.txt", logData)
+	common.LogToFile("impt_block_process_time.txt", logData)*/
 
 	// print state trie (jmlee)
 	// fmt.Println("$$$ print state trie at block", bc.CurrentBlock().Header().Number)
@@ -769,6 +769,8 @@ func (bc *BlockChain) insert(block *types.Block) {
 		// save database inspect result
 		dbLogFileDir := "./dbInspectResults/"
 		if _, err := os.Stat(dbLogFileDir + dbLogFileName); os.IsNotExist(err) {
+			startTime := time.Now()
+
 			fmt.Println("File definitely does not exist.")
 			inspectResult := rawdb.InspectDatabaseGetResult(rawdb.GlobalDB) // KiB bytes log
 			f, err := os.OpenFile(dbLogFileDir+dbLogFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -777,6 +779,9 @@ func (bc *BlockChain) insert(block *types.Block) {
 			}
 			fmt.Fprintln(f, inspectResult)
 			f.Close()
+
+			elapsedTime := time.Since(startTime)
+			trie.TotalPrefixingOverhead += uint64(elapsedTime.Nanoseconds()) // actually, this is not prefixing overhead, but just for convenience
 		} else {
 			fmt.Println("db inspect result log already exist. skip inspecting")
 		}
