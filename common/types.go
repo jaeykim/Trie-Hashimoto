@@ -46,6 +46,8 @@ var (
 
 	// blockNumber to set impt trie node prefixing (jmlee)
 	NextBlockNumber = uint64(1)
+	// SyncBoundary means fast sync boundary (ex. sync upto [SyncBoundary] blocks) (jmlee)
+	SyncBoundary = uint64(100)
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.

@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/jsre"
 	"github.com/ethereum/go-ethereum/internal/web3ext"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
@@ -300,6 +301,7 @@ func (c *Console) Welcome() {
 		message += " modules: " + strings.Join(modules, " ") + "\n"
 	}
 	fmt.Fprintln(c.printer, message)
+	fmt.Println("Sync Boundary : ", common.SyncBoundary)
 }
 
 // Evaluate executes code and pretty prints the result to the specified output

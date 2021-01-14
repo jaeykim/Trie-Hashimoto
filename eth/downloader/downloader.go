@@ -513,8 +513,10 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 	}
 	fetchers := []func() error{
 		func() error { return d.fetchHeaders(p, origin+1, pivot) }, // Headers are always retrieved
-		func() error { return d.fetchBodies(origin + 1) },          // Bodies are retrieved during normal and fast sync
-		func() error { return d.fetchReceipts(origin + 1) },        // Receipts are retrieved during fast sync
+		// func() error { return d.fetchBodies(origin + 1) },          // Bodies are retrieved during normal and fast sync
+		func() error { return d.fetchBodies(pivot) },          // Bodies are retrieved during normal and fast sync
+		// func() error { return d.fetchReceipts(origin + 1) }, // Receipts are retrieved during fast sync
+		func() error { return d.fetchReceipts(pivot) },        // Receipts are retrieved during fast sync
 		func() error { return d.processHeaders(origin+1, pivot, td) },
 	}
 	if d.mode == FastSync {
@@ -1457,28 +1459,37 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 				if d.mode == FastSync || d.mode == LightSync {
 					// Collect the yet unknown headers to mark them as uncertain
 					unknown := make([]*types.Header, 0, len(chunk))
-					for _, header := range chunk {
+					for i, header := range chunk {
+						// do not overstore the headers to limit fast sync boundary (jmlee)
+						if header.Number.Uint64() > common.SyncBoundary {
+							chunk = chunk[:i]
+							break
+						}
+
 						if !d.lightchain.HasHeader(header.Hash(), header.Number.Uint64()) {
 							unknown = append(unknown, header)
 						}
 					}
 					// If we're importing pure headers, verify based on their recentness
 					frequency := fsHeaderCheckFrequency
-					if chunk[len(chunk)-1].Number.Uint64()+uint64(fsHeaderForceVerify) > pivot {
-						frequency = 1
-					}
-					if n, err := d.lightchain.InsertHeaderChain(chunk, frequency); err != nil {
-						// If some headers were inserted, add them too to the rollback list
-						if n > 0 {
-							rollback = append(rollback, chunk[:n]...)
+					// Check chunk length to prevent overstoring headers to limit fast sync boundary (jmlee)
+					if len(chunk) > 0 {
+						if chunk[len(chunk)-1].Number.Uint64()+uint64(fsHeaderForceVerify) > pivot {
+							frequency = 1
 						}
-						log.Debug("Invalid header encountered", "number", chunk[n].Number, "hash", chunk[n].Hash(), "err", err)
-						return errInvalidChain
-					}
-					// All verifications passed, store newly found uncertain headers
-					rollback = append(rollback, unknown...)
-					if len(rollback) > fsHeaderSafetyNet {
-						rollback = append(rollback[:0], rollback[len(rollback)-fsHeaderSafetyNet:]...)
+						if n, err := d.lightchain.InsertHeaderChain(chunk, frequency); err != nil {
+							// If some headers were inserted, add them too to the rollback list
+							if n > 0 {
+								rollback = append(rollback, chunk[:n]...)
+							}
+							log.Debug("Invalid header encountered", "number", chunk[n].Number, "hash", chunk[n].Hash(), "err", err)
+							return errInvalidChain
+						}
+						// All verifications passed, store newly found uncertain headers
+						rollback = append(rollback, unknown...)
+						if len(rollback) > fsHeaderSafetyNet {
+							rollback = append(rollback[:0], rollback[len(rollback)-fsHeaderSafetyNet:]...)
+						}
 					}
 				}
 				// Unless we're doing light chains, schedule the headers for associated content retrieval
@@ -1504,7 +1515,8 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 			// Update the highest block number we know if a higher one is found.
 			d.syncStatsLock.Lock()
 			if d.syncStatsChainHeight < origin {
-				d.syncStatsChainHeight = origin - 1
+				// deprecate underline to limit fast sync boundary (jmlee)
+				// d.syncStatsChainHeight = origin - 1
 			}
 			d.syncStatsLock.Unlock()
 
@@ -1619,11 +1631,12 @@ func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 		}
 		// Split around the pivot block and process the two sides via fast/full sync
 		if atomic.LoadInt32(&d.committed) == 0 {
-			latest = results[len(results)-1].Header
-			if height := latest.Number.Uint64(); height > pivot+2*uint64(fsMinFullBlocks) {
-				log.Warn("Pivot became stale, moving", "old", pivot, "new", height-uint64(fsMinFullBlocks))
-				pivot = height - uint64(fsMinFullBlocks)
-			}
+			// deprecate underlines to limit fast sync boundary (jmlee)
+			// latest = results[len(results)-1].Header
+			// if height := latest.Number.Uint64(); height > pivot+2*uint64(fsMinFullBlocks) {
+			// 	log.Warn("Pivot became stale, moving", "old", pivot, "new", height-uint64(fsMinFullBlocks))
+			// 	pivot = height - uint64(fsMinFullBlocks)
+			// }
 		}
 		P, beforeP, afterP := splitAroundPivot(pivot, results)
 		if err := d.commitFastSyncData(beforeP, stateSync); err != nil {
