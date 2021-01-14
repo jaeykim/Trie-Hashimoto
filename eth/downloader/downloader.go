@@ -403,6 +403,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 
 	// Set the requested sync mode, unless it's forbidden
 	d.mode = mode
+	common.SyncMode = mode.String() // write sync mode for convenience (jmlee)
 
 	// Retrieve the origin peer and initiate the downloading process
 	p := d.peers.Peer(id)
@@ -1384,6 +1385,7 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 				"header", fmt.Sprintf("%d->%d", lastHeader, d.lightchain.CurrentHeader().Number),
 				"fast", fmt.Sprintf("%d->%d", lastFastBlock, curFastBlock),
 				"block", fmt.Sprintf("%d->%d", lastBlock, curBlock))
+			common.IsRolledBack = true
 		}
 	}()
 
