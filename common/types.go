@@ -48,6 +48,10 @@ var (
 	NextBlockNumber = uint64(1)
 	// SyncBoundary means fast sync boundary (ex. sync upto [SyncBoundary] blocks) (jmlee)
 	SyncBoundary = uint64(100)
+	// temp var to know sync mode at core/blockchain.go conveniently
+	SyncMode = "full"
+	// temp var to know that whether there was a roll-back while syncing
+	IsRolledBack = false
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
