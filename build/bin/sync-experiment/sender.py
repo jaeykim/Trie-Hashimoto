@@ -75,9 +75,10 @@ def main():
 
             elif words[0] == "kill":
                 # kill port, terminate full node
-                killCmd = "fuser -k " + FULL_PORT + "/tcp"
+                killCmd = "kill -9 $(lsof -t -i:" + FULL_PORT + ")"
                 os.system(killCmd)
-                print("killed")
+                time.sleep(10) # wait for termination
+                print("killed\n\n\n\n\n")
 
             else:
                 print("unknown command (messages = ", str(data, 'utf8'), ")")
