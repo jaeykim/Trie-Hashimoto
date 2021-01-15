@@ -5,7 +5,7 @@
 # --> original geth fast sync, repeat 10 times
 # 
 
-from web3 import Web3
+from web3 import Web3 # version: web3==5.12.0
 import sys
 import socket
 import os
@@ -21,15 +21,15 @@ SYNC_ADDR = "localhost"
 SYNC_PORT = "8084"
 SYNC_READY_PORT = "8089"
 GENESIS_PATH   = "../genesis.json"
-DB_PATH = "/data/impt_debug/syncExp/"
+DB_PATH = "/data/trieHashimoto/syncExp/"
 
 # Sync settings for directory names
 DATA_TYPE = sys.argv[1] # "GETH" or "TH" (original geth vs trie-hashimoto)
 SYNC_TYPE = sys.argv[2] # "fast" or "full"
 SYNC_INFO = DATA_TYPE + "_" + SYNC_TYPE # prefix for db directory name. e.g. "GETH_fast", "TH_full"
 SYNC_NUMBER = int(sys.argv[3])
-SYNC_LOG_PATH = "./syncTimeLogs/"   # should set this in geth too -> core/blockchain.go: insert() function to logging correctly
-DB_LOG_PATH = "./dbInspectResults/" # should set this in geth too -> core/blockchain.go: insert() function to logging correctly
+SYNC_TIME_LOG_PATH = "./syncTimeLogs/"  # should set this in geth too -> core/blockchain.go: insert() function to logging correctly
+DB_LOG_PATH = "./dbInspectResults/"     # should set this in geth too -> core/blockchain.go: insert() function to logging correctly
 
 # sync options
 MAX_WAIT_TIME = 2*24*60*60 # seconds (how long do you wait for syncing)
@@ -46,8 +46,8 @@ syncnode = Web3(Web3.HTTPProvider("http://" + SYNC_ADDR + ":" + SYNC_PORT))
 # Functions
 def main():
 
-    # make directory to save log files
-    Cmd = "mkdir " + SYNC_LOG_PATH
+    # make directory to save sync result log files
+    Cmd = "mkdir " + SYNC_TIME_LOG_PATH
     os.system(Cmd)
     Cmd = "mkdir " + DB_LOG_PATH
     os.system(Cmd)
@@ -87,11 +87,15 @@ def main():
 def killFullNode(message):
     print("Send kill signal to full node")
     try:
-        # connecting to the full node ready server 
+        # send kill message to full node
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((FULL_ADDR, int(FULL_READY_PORT)))
+        while fullnode.isConnected():
         s.send(bytes(str(message), 'utf8'))
+            time.sleep(1)
+        print("full node definitely turned off")
         return True
+
     except Exception as e:
         print(e)
         return False
@@ -142,8 +146,13 @@ def runSyncNode(enode, dirName, syncBoundary, n):
         print("sync node init finished")
 
         # run sync node at background
+        if SYNC_TYPE == "full":
+            # full archival sync
+            Cmd = "../geth --datadir \"" + DB_PATH + dirName + "\" --ethash.dagdir \"" + DB_PATH + dirName + "_ethash\" --keystore \"../keystore\" --gcmode archive --syncmode \"" + SYNC_TYPE + "\" --networkid 12345 --rpc --rpcaddr \"" + SYNC_ADDR + "\" --rpcport \"" + SYNC_PORT + "\" --rpccorsdomain \"*\" --port 30304 --rpcapi=\"admin,db,eth,debug,miner,net,shh,txpool,personal,web3\" --syncboundary " + str(syncBoundary) + " --allow-insecure-unlock &" 
+        else:
+            # fast non-archival sync
+            Cmd = "../geth --datadir \"" + DB_PATH + dirName + "\" --ethash.dagdir \"" + DB_PATH + dirName + "_ethash\" --keystore \"../keystore\" --syncmode \"" + SYNC_TYPE + "\" --networkid 12345 --rpc --rpcaddr \"" + SYNC_ADDR + "\" --rpcport \"" + SYNC_PORT + "\" --rpccorsdomain \"*\" --port 30304 --rpcapi=\"admin,db,eth,debug,miner,net,shh,txpool,personal,web3\" --syncboundary " + str(syncBoundary) + " --allow-insecure-unlock &" 
         print("run sync node cmd:", Cmd)
-        Cmd = "../geth --datadir \"" + DB_PATH + dirName + "\" --ethash.dagdir \"" + DB_PATH + dirName + "_ethash\" --keystore \"../keystore\" --syncmode \"" + SYNC_TYPE + "\" --networkid 12345 --rpc --rpcaddr \"" + SYNC_ADDR + "\" --rpcport \"" + SYNC_PORT + "\" --rpccorsdomain \"*\" --port 30304 --rpcapi=\"admin,db,eth,debug,miner,net,shh,txpool,personal,web3\" --syncboundary " + str(syncBoundary) + " --allow-insecure-unlock &" 
         os.system(Cmd)
 
         # check syncnode provider connection
@@ -177,10 +186,18 @@ def runSyncNode(enode, dirName, syncBoundary, n):
         # save result
         print("sync is finished: takes %d seconds" % (syncEndTime-syncStartTime))
         print("sync info:", syncInfo)
-        logFile = open(SYNC_LOG_PATH + DATA_TYPE + "_" + SYNC_TYPE + "_" + str(syncBoundary) + ".txt", "a+")
+        logFile = open(SYNC_TIME_LOG_PATH + DATA_TYPE + "_" + SYNC_TYPE + "_" + str(syncBoundary) + ".txt", "a+")
         logFile.write(str(syncEndTime-syncStartTime))
+        logFile.write("," + str(syncInfo))
         logFile.write("\n")
         logFile.close()
+
+        # clear data
+        Cmd = "rm -rf " + DB_PATH + dirName
+        os.system(Cmd)
+        Cmd = "rm -rf " + DB_PATH + dirName + "_ethash"
+        os.system(Cmd)
+
         return True
 
     except Exception as e:
