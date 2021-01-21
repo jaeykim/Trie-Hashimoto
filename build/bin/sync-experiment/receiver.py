@@ -12,7 +12,7 @@ import os
 import time
 
 # Fullnode Settings
-FULL_ADDR = "localhost"
+FULL_ADDR = "147.46.115.21" # sirius
 FULL_PORT = "8081"
 FULL_READY_PORT = "8091"
 
@@ -64,12 +64,6 @@ def main():
         enode = fullnode.geth.admin.nodeInfo()['enode']
         # enode = enode.replace("127.0.0.1", FULL_ADDR) # is it needed? (maybe not...)
         
-        # Create log directory
-        dir_name = SYNC_INFO + "_" + str(sync_boundaries[i])
-        print("Make directory [", DB_PATH + dir_name + "_log", "]")
-        Cmd = "mkdir -p " + DB_PATH + dir_name + "_log"
-        os.system(Cmd)
-
         # do sync for SYNC_NUMBER times
         dir_name = SYNC_INFO + "_" + str(sync_boundaries[i])
         for j in range(SYNC_NUMBER):
@@ -98,7 +92,7 @@ def killFullNode(message):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((FULL_ADDR, int(FULL_READY_PORT)))
         while fullnode.isConnected():
-        s.send(bytes(str(message), 'utf8'))
+            s.send(bytes(str(message), 'utf8'))
             time.sleep(1)
         print("full node definitely turned off")
         return True
