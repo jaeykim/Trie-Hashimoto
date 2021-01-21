@@ -16,6 +16,9 @@ GENESIS_PATH    = "../genesis.json"
 GETH_DB_PATH    = "/ssd/original_geth/db_full"  # original geth data
 TH_DB_PATH      = "/ssd/impt_geth/db_full"      # trie-hashimoto data
 
+# full node settings
+CACHE_SIZE = "30720" # MB (max: 21414 MB)
+
 # get ip address automatically
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.connect(("8.8.8.8", 80))
@@ -68,7 +71,7 @@ def main():
                 elif dataType == "TH":
                     DB_PATH = TH_DB_PATH
                 print("START FULL NODE! [ SyncBoundary : " , syncBoundary, "/ DataType:", dataType, "]")
-                Cmd = "../geth --datadir \"" + DB_PATH + "\" --ethash.dagdir \"" + DB_PATH + "_ethash\" --keystore \"../keystore\" --gcmode archive --networkid 12345 --rpc --rpcaddr \"" + FULL_ADDR + "\" --rpcport \"" + FULL_PORT + "\" --rpccorsdomain \"*\" --port 30303 --rpcapi=\"admin,db,eth,debug,miner,net,shh,txpool,personal,web3\" --syncboundary " + syncBoundary + " --allow-insecure-unlock &"
+                Cmd = "../geth --datadir \"" + DB_PATH + "\" --ethash.dagdir \"" + DB_PATH + "_ethash\" --keystore \"../keystore\" --gcmode archive --cache " + CACHE_SIZE + " --networkid 12345 --rpc --rpcaddr \"" + FULL_ADDR + "\" --rpcport \"" + FULL_PORT + "\" --rpccorsdomain \"*\" --port 30303 --rpcapi=\"admin,db,eth,debug,miner,net,shh,txpool,personal,web3\" --syncboundary " + syncBoundary + " --allow-insecure-unlock &"
                 print("cmd:", Cmd)
                 os.system(Cmd)
                 print("FULL NODE EXECUTED!")
