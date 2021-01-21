@@ -32,12 +32,10 @@ SYNC_TIME_LOG_PATH = "./syncTimeLogs/"  # should set this in geth too -> core/bl
 DB_LOG_PATH = "./dbInspectResults/"     # should set this in geth too -> core/blockchain.go: insert() function to logging correctly
 
 # sync options
-MAX_WAIT_TIME = 2*24*60*60 # seconds (how long do you wait for syncing)
-MAX_WAIT_TIME = 5*60*60 # seconds (how long do you wait for syncing)
+MAX_WAIT_TIME = 3*24*60*60 # seconds (how long do you wait for syncing)
 
-# Boundaries and Path
-sync_boundaries = [100000]
-# sync_boundaries = [50000, 100000, 150000, 200000, 250000, 300000, 350000, 400000, 450000, 500000]
+# sync boundaries (target sync block number)
+sync_boundaries = [100]
 
 # Providers
 fullnode = Web3(Web3.HTTPProvider("http://" + FULL_ADDR + ":" + FULL_PORT))
