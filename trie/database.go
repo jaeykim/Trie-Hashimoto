@@ -574,7 +574,7 @@ func (db *Database) node(hash common.Hash) node {
 	// fmt.Println(logData)
 
 	// append or write logData to file
-	common.LogToFile("impt_data_log.txt", logData)
+	// common.LogToFile("impt_data_log.txt", logData)
 
 	if err != nil || enc == nil {
 		return nil
@@ -637,7 +637,7 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	// fmt.Println(logData)
 
 	// append or write logData to file
-	common.LogToFile("impt_data_log.txt", logData)
+	// common.LogToFile("impt_data_log.txt", logData)
 
 	if err == nil && enc != nil {
 		if db.cleans != nil {

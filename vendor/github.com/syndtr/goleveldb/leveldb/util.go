@@ -103,6 +103,7 @@ func ensureBuffer(b []byte, n int) []byte {
 
 // logLevelInfo logs which level the value is found at (jmlee)
 func logLevelInfo(level int) {
+	return
 	// append or write logData to file
 	f, err := os.OpenFile(LogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
