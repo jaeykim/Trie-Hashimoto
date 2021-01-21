@@ -71,7 +71,16 @@ def main():
         os.system(Cmd)
 
         # do sync for SYNC_NUMBER times
+        dir_name = SYNC_INFO + "_" + str(sync_boundaries[i])
         for j in range(SYNC_NUMBER):
+            while not killFullNode("kill"):
+                time.sleep(1)
+            print("full node turned off")
+            time.sleep(5)
+            while not runFullNode(DATA_TYPE, sync_boundaries[i]):
+                time.sleep(5)
+            print("full node turned on")
+            time.sleep(5)
             # try syncing until it success
             while not runSyncNode(enode, dir_name, sync_boundaries[i], j):
                 time.sleep(5)
