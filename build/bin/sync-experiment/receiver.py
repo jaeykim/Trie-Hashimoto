@@ -91,7 +91,7 @@ def killFullNode(message):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((FULL_ADDR, int(FULL_READY_PORT)))
         while fullnode.isConnected():
-        s.send(bytes(str(message), 'utf8'))
+            s.send(bytes(str(message), 'utf8'))
             time.sleep(1)
         print("full node definitely turned off")
         return True
