@@ -51,7 +51,7 @@ var (
 	// blockNumber to set impt trie node prefixing (jmlee)
 	NextBlockNumber = uint64(1)
 	// SyncBoundary means fast sync boundary (ex. sync upto [SyncBoundary] blocks) (jmlee)
-	SyncBoundary = uint64(100)
+	SyncBoundary = uint64(10000000)
 	// temp var to know sync mode at core/blockchain.go conveniently
 	SyncMode = "full"
 	// temp var to know that whether there was a roll-back while syncing
