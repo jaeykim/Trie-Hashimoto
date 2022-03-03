@@ -27,8 +27,12 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"golang.org/x/crypto/sha3"
 )
+
+// GlobalDB is a variable to access leveldb at everywhere (jmlee)
+var GlobalDB ethdb.Database
 
 // Lengths of hashes and addresses in bytes.
 const (

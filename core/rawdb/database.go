@@ -222,6 +222,7 @@ func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, freezer 
 		return nil, err
 	}
 	GlobalDB = frdb // set globaldb (jmlee)
+	common.GlobalDB = frdb // set globaldb (jmlee)
 	fmt.Println("GlobalDB is set")
 
 	// open additional leveldb for indexed trie nodes (jmlee)
