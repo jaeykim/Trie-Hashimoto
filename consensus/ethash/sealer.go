@@ -30,6 +30,7 @@ import (
 	"time"
 	impt_log "log"
 	"os"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -106,14 +107,21 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 		// Do IMPT mining for state trie nodes (sjkim)
 		trie := state.Trie()
 		number := block.Header().Number.Uint64()
+		thMiningStartTime := time.Now()
 		trieHash, trieNonces := (*trie).HashWithNonce(number, threads)
-		
+		thMiningTime := time.Since(thMiningStartTime)
+		fmt.Println("\nelapsed time to find nonce for", len(trieNonces), "trie nodes:", 
+			"(", int64(thMiningTime/time.Nanosecond), "ns", 
+			"/", int64(thMiningTime/time.Microsecond), "us",
+			"/", int64(thMiningTime/time.Millisecond), "ms)")
+
 		// Update block header's stateRoot field after IMPT mining
 		block.ModifyRoot(trieHash)
 		// Update block body's trieNonces field after IMPT mining
 		block.ModifyBody(trieNonces)
 	}
 	
+	miningStartTime := time.Now()
 	var (
 		pend   sync.WaitGroup
 		locals = make(chan *types.Block)
@@ -150,6 +158,12 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 		// Wait for all miners to terminate and return the block
 		pend.Wait()
 	}()
+	miningTime := time.Since(miningStartTime)
+	fmt.Println("elapsed time to find nonce for a block:", 
+			"(", int64(miningTime/time.Nanosecond), "ns", 
+			"/", int64(miningTime/time.Microsecond), "us",
+			"/", int64(miningTime/time.Millisecond), "ms)\n")
+
 	return nil
 }
 
