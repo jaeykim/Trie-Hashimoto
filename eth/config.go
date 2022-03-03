@@ -45,7 +45,7 @@ var DefaultConfig = Config{
 	},
 	NetworkId:      1,
 	LightPeers:     100,
-	DatabaseCache:  512,
+	DatabaseCache:  512, // levelDB cache size (MB)
 	TrieCleanCache: 256,
 	TrieDirtyCache: 256,
 	TrieTimeout:    60 * time.Minute,

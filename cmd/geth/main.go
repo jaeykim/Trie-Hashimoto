@@ -266,6 +266,9 @@ func init() {
 			if err := mem.Get(); err == nil {
 				allowance := int(mem.Total / 1024 / 1024 / 3)
 				if cache := ctx.GlobalInt(utils.CacheFlag.Name); cache > allowance {
+					// 캐시 용량은 최대 전체 RAM 용량의 1/3 까지만 사용 가능 (jmlee)
+					// for test: make cache size as 0
+					// allowance = 0
 					log.Warn("Sanitizing cache to Go's GC limits", "provided", cache, "updated", allowance)
 					ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(allowance))
 				}

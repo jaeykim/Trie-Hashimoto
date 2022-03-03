@@ -103,8 +103,7 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 	}
 
 	if impt {
-		// Do IMPT mining for state trie nodes
-		// HashWithNonce()
+		// Do IMPT mining for state trie nodes (sjkim)
 		trie := state.Trie()
 		number := block.Header().Number.Uint64()
 		trieHash, trieNonces := (*trie).HashWithNonce(number, threads)
