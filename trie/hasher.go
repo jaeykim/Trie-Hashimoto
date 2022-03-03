@@ -417,6 +417,7 @@ search:
 				panic("encode error: " + err.Error())
 			}
 			hash := h.makeHashNode(h.tmp)
+			// fmt.Println("node hash without block header:", common.BytesToHash(hash).Hex())
 			randomBlockNum := common.BytesToHash(hash).Big().Uint64() % common.NextBlockNumber
 
 			// get block header (from disk)
@@ -429,7 +430,6 @@ search:
 			hash = h.makeHashNode(append(h.tmp, rlpedBlockHeader...)) // hashing node with block header
 			
 			// print logs
-			// fmt.Println("node hash without block header:", common.BytesToHash(hash).Hex())
 			// fmt.Println("get header's hash from disk -> blocknumber:", randomBlockNum, " / hash:", randomBlockHash.Hex())
 			// fmt.Println("elapsed time to get block header:", int(elapsed1.Nanoseconds()))
 			// fmt.Println("get header's rlp data from disk -> RLPed bytes:", rlpedBlockHeader)
