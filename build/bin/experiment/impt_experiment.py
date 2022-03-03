@@ -4,10 +4,12 @@ import sys
 #import random
 #import json
 #import rlp
-#import time
+import time
 #import binascii
 #import numpy as np
 import os,binascii
+from datetime import datetime
+from multiprocessing import Pool
 
 # Settings
 FULL_PORT = "8081"
@@ -15,7 +17,16 @@ PASSWORD = "1234"
 
 # Account number
 ACCOUNT_NUM = int(sys.argv[1])
-TX_PER_BLOCK = 200
+TX_PER_BLOCK = 1
+MINING_THREAD_NUM = 8 # Geth's option
+
+# multiprocessing
+THREAD_COUNT = 8
+
+# tx arguments option
+INCREMENTAL_RECEIVER_ADDRESS = True # set tx receiver: incremental vs random
+INCREMENTAL_SEND_AMOUNT = True      # set send amount: incremental vs same (1 wei)
+MAX_ADDRESS = 0                     # set max address to set the receiver address upper bound (0 means there is no bound)
 
 # providers
 fullnode = Web3(Web3.HTTPProvider("http://localhost:" + FULL_PORT))
@@ -35,17 +46,26 @@ def main():
     # get current block
     currentBlock = fullnode.eth.blockNumber
 
-    print("start sending transactions")
     # main loop for send txs
+    print("start sending transactions")
+    startTime = datetime.now()
+    offset = 1
+    cnt = 0
+    txNums = [int(TX_PER_BLOCK/THREAD_COUNT)]*THREAD_COUNT
+    txNums[0] += TX_PER_BLOCK%THREAD_COUNT
     for i in range(int(ACCOUNT_NUM / TX_PER_BLOCK)):
-
-        # send transactions
-        for j in range(TX_PER_BLOCK):
-            to = makeRandHex()
-            sendTransaction(to)
-            #print("Send Tx# {0}".format(j), end="\r")
+        # set arguments for multithreading function
+        arguments = []
+        for j in range(THREAD_COUNT):
+            arguments.append((txNums[j], offset))
+            offset += txNums[j]
         
-        print("inserted ", (i+1)*TX_PER_BLOCK, "accounts")
+        # send transactions
+        sendPool.starmap(sendTransactions, arguments)
+        cnt = cnt + TX_PER_BLOCK
+        if cnt % 10000 == 0:
+            elapsed = datetime.now() - startTime
+            print("inserted ", (i+1)*TX_PER_BLOCK, "accounts / elapsed time:", elapsed)
 
         # mining
         fullnode.geth.miner.start(1)  # start mining
@@ -53,7 +73,6 @@ def main():
             pass # just wait for mining
         fullnode.geth.miner.stop()  # stop mining
         currentBlock = fullnode.eth.blockNumber
-
 
 
 
@@ -70,16 +89,58 @@ def sendTransaction(to):
 
 
 
+def sendTransactions(num, offset):
+    for i in range(int(num)):
+        # set receiver
+        if INCREMENTAL_RECEIVER_ADDRESS:
+            to = intToAddr(int(offset+i))
+        else:
+            to = makeRandHex()
+
+        # if the upper bound is set, select receiver within the bound
+        if MAX_ADDRESS != 0:
+            to = intToAddr(random.randint(1, MAX_ADDRESS))
+
+        # to = "0xe4f853b9d237b220f0ECcdf55d224c54a30032Df"
+        
+        # set send amount
+        if INCREMENTAL_SEND_AMOUNT:
+            amount = int(offset+i)
+        else:
+            amount = int(1)
+
+        # print("to: ", to, "/ from: ", fullnode.eth.coinbase, "/ amount:", amount)
+
+        while True:
+            try:
+                fullnode.eth.sendTransaction(
+                    {'to': to, 'from': fullnode.eth.coinbase, 'value': hex(amount), 'gas': '21000', 'data': ""})
+                break
+            except:
+                time.sleep(1)
+                continue
+
+
+
 def makeRandHex():
 	randHex = binascii.b2a_hex(os.urandom(20))
 	return Web3.toChecksumAddress("0x" + randHex.decode('utf-8'))
 
 
 
+def intToAddr(num):
+    intToHex = f'{num:0>40x}'
+    return Web3.toChecksumAddress("0x" + intToHex)
+
+
+
 if __name__ == "__main__":
 
-    #print(Web3.toChecksumAddress(makeRandHex()))
+    startTime = datetime.now()
+    sendPool = Pool(THREAD_COUNT) # -> important: this should be in this "__main__" function
     main()
+    elapsed = datetime.now() - startTime
+    print("elapsed time:", elapsed)
     print("DONE")
 
 
