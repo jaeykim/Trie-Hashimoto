@@ -46,7 +46,7 @@ type keccakState interface {
 type sliceBuffer []byte
 
 var fakeIMPT bool = true
-var PrefixLength int = 3	// actually, this may be prefix bytes (ex. PrefixLength = 3 -> prefixes 6 characters)
+var PrefixLength int = 4	// actually, this may be prefix bytes (ex. PrefixLength = 3 -> prefixes 6 characters)
 
 func (b *sliceBuffer) Write(data []byte) (n int, err error) {
 	*b = append(*b, data...)
@@ -249,7 +249,9 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]uint64, i
 		if db == nil {
 			if trieNonces == nil {
 				// Used for normal Hash()
-				if hash == nil { hash = h.makeHashNode(h.tmp); }
+				if hash == nil {
+					hash = h.makeHashNode(h.tmp)
+				}
 			} else if isMining && dirty {
 				// Used for HashWithNonce()
 				// Make new hashNode even if hashNode info already exists in cache
@@ -263,7 +265,11 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]uint64, i
 					if err := rlp.Encode(&h.tmp, n); err != nil {
 						panic("encode error: " + err.Error())
 					}
-					hash = h.makeHashNode(h.tmp)
+					hash = h.makeHashNode(h.tmp) // hash of trie node with certain nonce value
+					randomBlockNum := common.BytesToHash(hash).Big().Uint64() % common.NextBlockNumber // determined by the trie node's hash
+					randomBlockHash := ReadCanonicalHash(randomBlockNum)				// get block header's hash
+					rlpedBlockHeader := ReadHeaderRLP(randomBlockHash, randomBlockNum)	// get RLPed block header with block hash and block number
+					hash = h.makeHashNode(append(h.tmp, rlpedBlockHeader...))			// hashing node with block header
 					if !validHash(hash, blockNum) {
 						panic("HashWithNonce error")
 					}	
@@ -329,10 +335,11 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]uint64, i
 	return hash, nonce, nil
 }
 
+// mining trie nodes with threads (sjkim)
 func trieNodeMining(n node, blockNum uint64, threads int) uint64 {
 	var (
 		pend   sync.WaitGroup
-		abort = make(chan struct{})
+		abort  = make(chan struct{})
 		locals = make(chan uint64)
 		result uint64
 	)
@@ -377,7 +384,6 @@ func imptMine(n node, id int, blockNum uint64, seed uint64, abort chan struct{},
 	)
 	logger := log.New("miner_impt", id)
 	logger.Trace("Started IMPT search for new nonces", "seed", seed)
-	hash := hashNode{}
 
 	h := newHasher(nil)
 	defer returnHasherToPool(h)
@@ -399,13 +405,36 @@ search:
 				attempts = 0
 			}
 			*/
-			// Compute the PoW value of this nonce
+
+			//
+			// get block header (jmlee)
+			//
+
+			// compute block header number for this nonce: i = hash(node || nonce) mod Height
 			h.tmp.Reset()
 			n.setNonce(nonce)
 			if err := rlp.Encode(&h.tmp, n); err != nil {
 				panic("encode error: " + err.Error())
 			}
-			hash = h.makeHashNode(h.tmp)
+			hash := h.makeHashNode(h.tmp)
+			randomBlockNum := common.BytesToHash(hash).Big().Uint64() % common.NextBlockNumber
+
+			// get block header (from disk)
+			// start1 := time.Now()
+			randomBlockHash := ReadCanonicalHash(randomBlockNum)               // get block header's hash
+			rlpedBlockHeader := ReadHeaderRLP(randomBlockHash, randomBlockNum) // get RLPed block header with block hash and block number
+			// elapsed1 := time.Since(start1)
+
+			// Compute the PoW value of this nonce: s = hash(node || nonce || Headers[i])
+			hash = h.makeHashNode(append(h.tmp, rlpedBlockHeader...)) // hashing node with block header
+			
+			// print logs
+			// fmt.Println("node hash without block header:", common.BytesToHash(hash).Hex())
+			// fmt.Println("get header's hash from disk -> blocknumber:", randomBlockNum, " / hash:", randomBlockHash.Hex())
+			// fmt.Println("elapsed time to get block header:", int(elapsed1.Nanoseconds()))
+			// fmt.Println("get header's rlp data from disk -> RLPed bytes:", rlpedBlockHeader)
+			// fmt.Println("header size:", len(rlpedBlockHeader))
+			// fmt.Println("changed hash with header data:", common.BytesToHash(hash).Hex())
 
 			// Correct nonce found
 			if validHash(hash, blockNum) {
@@ -413,12 +442,15 @@ search:
 				select {
 				// Include IMPT mining result in the sealed block body
 				case found <- nonce:
+					// fmt.Println("success node mining -> node hash:", common.BytesToHash(hash).Hex())
 					logger.Trace("IMPT nonce found and reported", "attempts", nonce-seed, "nonce", nonce)
 				case <-abort:
 					logger.Trace("IMPT nonce found but discarded", "attempts", nonce-seed, "nonce", nonce)
 				}
 				break search
 			}
+
+			// try next nonce
 			nonce++
 		}
 	}
@@ -485,7 +517,7 @@ func _modifyHash(n node, hash hashNode) hashNode {
 				numOfChildren++
 			}
 		}
-		newHash[0] = byte(numOfChildren%16)
+		newHash[0] = byte(numOfChildren % 16)
 		newHash[1] = byte(tmp[0]) << 4
 		newHash[1] |= byte(tmp[1])
 		newHash[2] = byte(tmp[2]) << 4
@@ -494,4 +526,85 @@ func _modifyHash(n node, hash hashNode) hashNode {
 	default:
 		return nil
 	}
+}
+
+//
+// functions from rawdb package, to avoid cyclic import error (jmlee)
+//
+
+// from core/rawdb/schema.go
+// encodeBlockNumber encodes a block number as big endian uint64
+func encodeBlockNumber(number uint64) []byte {
+	enc := make([]byte, 8)
+	binary.BigEndian.PutUint64(enc, number)
+	return enc
+}
+
+// from core/rawdb/schema.go
+// The fields below define the low level database schema prefixing.
+var (
+	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
+	headerPrefix     = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
+	headerHashSuffix = []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
+)
+
+// from core/rawdb/schema.go
+const (
+	// freezerHeaderTable indicates the name of the freezer header table.
+	freezerHeaderTable = "headers"
+
+	// freezerHashTable indicates the name of the freezer canonical hash table.
+	freezerHashTable = "hashes"
+)
+
+// from core/rawdb/schema.go
+// headerHashKey = headerPrefix + num (uint64 big endian) + headerHashSuffix
+func headerHashKey(number uint64) []byte {
+	// headerPrefix := []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
+	// headerHashSuffix := []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
+	return append(append(headerPrefix, encodeBlockNumber(number)...), headerHashSuffix...)
+}
+
+// from core/rawdb/schema.go
+// headerKey = headerPrefix + num (uint64 big endian) + hash
+func headerKey(number uint64, hash common.Hash) []byte {
+	// headerPrefix := []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
+	return append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+}
+
+// from core/rawdb/accessors_chain.go
+// ReadCanonicalHash retrieves the hash assigned to a canonical block number.
+func ReadCanonicalHash(number uint64) common.Hash {
+	data, _ := common.GlobalDB.Ancient(freezerHashTable, number)
+	if len(data) == 0 {
+		data, _ = common.GlobalDB.Get(headerHashKey(number))
+		// In the background freezer is moving data from leveldb to flatten files.
+		// So during the first check for ancient db, the data is not yet in there,
+		// but when we reach into leveldb, the data was already moved. That would
+		// result in a not found error.
+		if len(data) == 0 {
+			data, _ = common.GlobalDB.Ancient(freezerHashTable, number)
+		}
+	}
+	if len(data) == 0 {
+		return common.Hash{}
+	}
+	return common.BytesToHash(data)
+}
+
+// from core/rawdb/accessors_chain.go
+// ReadHeaderRLP retrieves a block header in its raw RLP database encoding.
+func ReadHeaderRLP(hash common.Hash, number uint64) rlp.RawValue {
+	data, _ := common.GlobalDB.Ancient(freezerHeaderTable, number)
+	if len(data) == 0 {
+		data, _ = common.GlobalDB.Get(headerKey(number, hash))
+		// In the background freezer is moving data from leveldb to flatten files.
+		// So during the first check for ancient db, the data is not yet in there,
+		// but when we reach into leveldb, the data was already moved. That would
+		// result in a not found error.
+		if len(data) == 0 {
+			data, _ = common.GlobalDB.Ancient(freezerHeaderTable, number)
+		}
+	}
+	return data
 }
