@@ -45,7 +45,7 @@ type keccakState interface {
 
 type sliceBuffer []byte
 
-var fakeIMPT bool = true
+var fakeIMPT bool = true	// forcely prefixing trie node's hash value with block number without mining
 var PrefixLength int = 4	// actually, this may be prefix bytes (ex. PrefixLength = 3 -> prefixes 6 characters)
 
 func (b *sliceBuffer) Write(data []byte) (n int, err error) {
