@@ -56,6 +56,8 @@ var (
 	SyncMode = "full"
 	// temp var to know that whether there was a roll-back while syncing
 	IsRolledBack = false
+	// temp var to know where did geth get the trie node from (c: clean cache, d: dirty cache, p: persist db) ("c","d" mean memory cache)
+	TrieNodeFrom = "p"
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.

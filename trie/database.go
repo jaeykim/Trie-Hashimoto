@@ -589,6 +589,7 @@ func (db *Database) node(hash common.Hash) node {
 
 // Node retrieves an encoded cached trie node from memory. If it cannot be found
 // cached, the method queries the persistent database for the content.
+// (sender uses this function to find trie nodes for receiver while syncing) (jmlee)
 func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	// It doens't make sense to retrieve the metaroot
 	if hash == (common.Hash{}) {
@@ -599,6 +600,8 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 		if enc, err := db.cleans.Get(string(hash[:])); err == nil && enc != nil {
 			memcacheCleanHitMeter.Mark(1)
 			memcacheCleanReadMeter.Mark(int64(len(enc)))
+			common.TrieNodeFrom = "c"
+			// fmt.Println("get trie node from: clean cache")
 			return enc, nil
 		}
 	}
@@ -608,6 +611,8 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	db.lock.RUnlock()
 
 	if dirty != nil {
+		common.TrieNodeFrom = "d"
+		// fmt.Println("get trie node from: dirty cache")
 		return dirty.rlp(), nil
 	}
 	// Content unavailable in memory, attempt to retrieve from disk
@@ -646,6 +651,8 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 			memcacheCleanWriteMeter.Mark(int64(len(enc)))
 		}
 	}
+	common.TrieNodeFrom = "p"
+	// fmt.Println("get trie node from: persist DB")
 	return enc, err
 }
 
