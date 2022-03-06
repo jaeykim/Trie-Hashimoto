@@ -853,11 +853,11 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		timestamp = int64(parent.Time() + 1)
 	}
 	// this will ensure we're not going off too far in the future
-	if now := time.Now().Unix(); timestamp > now+1 {
-		wait := time.Duration(timestamp-now) * time.Second
-		log.Info("Mining too far in the future", "wait", common.PrettyDuration(wait))
-		//time.Sleep(wait) // remove sleeping term in mining (jmlee)
-	}
+	// if now := time.Now().Unix(); timestamp > now+1 {
+	// 	wait := time.Duration(timestamp-now) * time.Second
+	// 	log.Info("Mining too far in the future", "wait", common.PrettyDuration(wait))
+	// 	// time.Sleep(wait) // remove sleeping term in mining (jmlee)
+	// }
 
 	num := parent.Number()
 	header := &types.Header{
