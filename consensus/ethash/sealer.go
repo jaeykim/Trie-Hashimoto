@@ -107,13 +107,20 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 		// Do IMPT mining for state trie nodes (sjkim)
 		trie := state.Trie()
 		number := block.Header().Number.Uint64()
+		common.MiningTimes = []int64{}
 		thMiningStartTime := time.Now()
 		trieHash, trieNonces := (*trie).HashWithNonce(number, threads)
 		thMiningTime := time.Since(thMiningStartTime)
+		fmt.Println("threads num: ", threads)
 		fmt.Println("\nelapsed time to find nonce for", len(trieNonces), "trie nodes:", 
 			"(", int64(thMiningTime/time.Nanosecond), "ns", 
 			"/", int64(thMiningTime/time.Microsecond), "us",
 			"/", int64(thMiningTime/time.Millisecond), "ms)")
+		sumOfMiningTimes := int64(0)
+		for _, time := range common.MiningTimes {
+			sumOfMiningTimes += time
+		}
+		fmt.Println("average mining time for single trie node:", sumOfMiningTimes/int64(len(common.MiningTimes))/1000000, "ms")
 
 		// Update block header's stateRoot field after IMPT mining
 		block.ModifyRoot(trieHash)
@@ -142,6 +149,22 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 			close(abort)
 		case result = <-locals:
 			// One of the threads found a block, abort all others
+			miningTime := time.Since(miningStartTime)
+			fmt.Println("elapsed time to find nonce for a block:", 
+				"(", int64(miningTime/time.Nanosecond), "ns", 
+				"/", int64(miningTime/time.Microsecond), "us",
+				"/", int64(miningTime/time.Millisecond), "ms)\n")
+			common.BlockMiningTimes[int64(threads)] = append(common.BlockMiningTimes[int64(threads)], int64(miningTime/time.Millisecond))
+			
+			fmt.Println("print block mining times with", threads, "threads")
+			blockMiningTimeSum := int64(0)
+			for _, time := range common.BlockMiningTimes[int64(threads)] {
+				fmt.Print(time, " ")
+				blockMiningTimeSum += time
+			}
+			fmt.Println("")
+			fmt.Println("avg:",blockMiningTimeSum/int64(len(common.BlockMiningTimes[int64(threads)])), "ms")
+
 			select {
 			case results <- result:
 			default:
@@ -158,11 +181,6 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 		// Wait for all miners to terminate and return the block
 		pend.Wait()
 	}()
-	miningTime := time.Since(miningStartTime)
-	fmt.Println("elapsed time to find nonce for a block:", 
-			"(", int64(miningTime/time.Nanosecond), "ns", 
-			"/", int64(miningTime/time.Microsecond), "us",
-			"/", int64(miningTime/time.Millisecond), "ms)\n")
 
 	return nil
 }

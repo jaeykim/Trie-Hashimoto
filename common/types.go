@@ -58,6 +58,10 @@ var (
 	IsRolledBack = false
 	// temp var to know where did geth get the trie node from (c: clean cache, d: dirty cache, p: persist db) ("c","d" mean memory cache)
 	TrieNodeFrom = "p"
+	// temp var to measure more specific mining time
+	MiningTimes []int64
+	// temp var to measure more specific mining time (BlockMiningTimes[threadNum] = mining time array)
+	BlockMiningTimes = make(map[int64][]int64)
 	// block headers for impt mining (jmlee)
 	RLPedBlockHeaders = make([][]byte, 0)
 )
