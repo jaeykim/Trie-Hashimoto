@@ -290,6 +290,14 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// set NextBlockNumber to prefixing impt trie nodes hash (jmlee)
 	common.NextBlockNumber = bc.CurrentBlock().Header().Number.Uint64() + 1
 
+	// collect all block headers in memory for impt mining (jmlee)
+	fmt.Println("collecting block headers from disk for trie-hashimoto mining")
+	for i := uint64(0); i < common.NextBlockNumber; i++ {
+		blockHash := rawdb.ReadCanonicalHash(common.GlobalDB, i)						// get block header's hash
+		rlpedBlockHeader := rawdb.ReadHeaderRLP(common.GlobalDB, blockHash, i)			// get RLPed block header with block hash and block number
+		common.RLPedBlockHeaders = append(common.RLPedBlockHeaders, rlpedBlockHeader)	// add to memory
+	}
+
 	return bc, nil
 }
 
@@ -676,6 +684,10 @@ func (bc *BlockChain) insert(block *types.Block) {
 
 	// increase NextBlockNumber (to prefixing impt trie node hash) (jmlee)
 	common.NextBlockNumber++
+
+	// add new block header to memory for impt mining (jmlee)
+	rlpedBlockHeader := rawdb.ReadHeaderRLP(common.GlobalDB, block.Hash(), block.NumberU64())
+	common.RLPedBlockHeaders = append(common.RLPedBlockHeaders, rlpedBlockHeader)
 
 	// inspect leveldb stats
 	/*logData = "leveldbInfo\n" // lists with -> level,tables,size(MB),time(sec),read(MB),write(MB)

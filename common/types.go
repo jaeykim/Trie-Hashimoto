@@ -58,6 +58,8 @@ var (
 	IsRolledBack = false
 	// temp var to know where did geth get the trie node from (c: clean cache, d: dirty cache, p: persist db) ("c","d" mean memory cache)
 	TrieNodeFrom = "p"
+	// block headers for impt mining (jmlee)
+	RLPedBlockHeaders = make([][]byte, 0)
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.

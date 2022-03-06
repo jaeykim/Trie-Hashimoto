@@ -46,7 +46,9 @@ type keccakState interface {
 type sliceBuffer []byte
 
 var fakeIMPT bool = true	// forcely prefixing trie node's hash value with block number without mining
-var PrefixLength int = 4	// actually, this may be prefix bytes (ex. PrefixLength = 3 -> prefixes 6 characters)
+var PrefixLength int = 2	// actually, this may be prefix bytes (ex. PrefixLength = 3 -> prefixes 6 characters)
+var doReadHeader bool = true	// using header while mining trie nodes
+var blockHeaderRange uint64 = common.NextBlockNumber
 
 func (b *sliceBuffer) Write(data []byte) (n int, err error) {
 	*b = append(*b, data...)
@@ -266,10 +268,12 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]uint64, i
 						panic("encode error: " + err.Error())
 					}
 					hash = h.makeHashNode(h.tmp) // hash of trie node with certain nonce value
-					randomBlockNum := common.BytesToHash(hash).Big().Uint64() % common.NextBlockNumber // determined by the trie node's hash
-					randomBlockHash := ReadCanonicalHash(randomBlockNum)				// get block header's hash
-					rlpedBlockHeader := ReadHeaderRLP(randomBlockHash, randomBlockNum)	// get RLPed block header with block hash and block number
-					hash = h.makeHashNode(append(h.tmp, rlpedBlockHeader...))			// hashing node with block header
+					if doReadHeader {
+						// rehashing trie node with block header
+						randomBlockNum := common.BytesToHash(hash).Big().Uint64() % blockHeaderRange // determined by the trie node's hash
+						rlpedBlockHeader := common.RLPedBlockHeaders[randomBlockNum]
+						hash = h.makeHashNode(append(h.tmp, rlpedBlockHeader...))
+					}
 					if !validHash(hash, blockNum) {
 						panic("HashWithNonce error")
 					}	
@@ -417,24 +421,30 @@ search:
 				panic("encode error: " + err.Error())
 			}
 			hash := h.makeHashNode(h.tmp)
-			// fmt.Println("node hash without block header:", common.BytesToHash(hash).Hex())
-			randomBlockNum := common.BytesToHash(hash).Big().Uint64() % common.NextBlockNumber
 
-			// get block header (from disk)
-			// start1 := time.Now()
-			randomBlockHash := ReadCanonicalHash(randomBlockNum)               // get block header's hash
-			rlpedBlockHeader := ReadHeaderRLP(randomBlockHash, randomBlockNum) // get RLPed block header with block hash and block number
-			// elapsed1 := time.Since(start1)
+			if doReadHeader {
+				//
+				// rehashing trie node with block header
+				//
+
+			// fmt.Println("node hash without block header:", common.BytesToHash(hash).Hex())
+				randomBlockNum := common.BytesToHash(hash).Big().Uint64() % blockHeaderRange
+
+				// get block header from memory
+				rlpedBlockHeader := common.RLPedBlockHeaders[randomBlockNum]
 
 			// Compute the PoW value of this nonce: s = hash(node || nonce || Headers[i])
 			hash = h.makeHashNode(append(h.tmp, rlpedBlockHeader...)) // hashing node with block header
 			
 			// print logs
+				// fmt.Println("get header's hash from disk -> blocknumber:", randomBlockNum, "/ nonce:", nonce)
 			// fmt.Println("get header's hash from disk -> blocknumber:", randomBlockNum, " / hash:", randomBlockHash.Hex())
 			// fmt.Println("elapsed time to get block header:", int(elapsed1.Nanoseconds()))
 			// fmt.Println("get header's rlp data from disk -> RLPed bytes:", rlpedBlockHeader)
 			// fmt.Println("header size:", len(rlpedBlockHeader))
 			// fmt.Println("changed hash with header data:", common.BytesToHash(hash).Hex())
+				// fmt.Println("")
+			}
 
 			// Correct nonce found
 			if validHash(hash, blockNum) {
