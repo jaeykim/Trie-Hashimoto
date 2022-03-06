@@ -116,11 +116,13 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 			"(", int64(thMiningTime/time.Nanosecond), "ns", 
 			"/", int64(thMiningTime/time.Microsecond), "us",
 			"/", int64(thMiningTime/time.Millisecond), "ms)")
+		if len(common.MiningTimes) != 0 {
 		sumOfMiningTimes := int64(0)
 		for _, time := range common.MiningTimes {
 			sumOfMiningTimes += time
 		}
 		fmt.Println("average mining time for single trie node:", sumOfMiningTimes/int64(len(common.MiningTimes))/1000000, "ms")
+		}
 
 		// Update block header's stateRoot field after IMPT mining
 		block.ModifyRoot(trieHash)
