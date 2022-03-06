@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const GlobalTrieNodeDBLength = 1
+const GlobalTrieNodeDBLength = 0 // deprecated feature (jmlee)
 
 var GlobalTrieNodeDB [GlobalTrieNodeDBLength]ethdb.Database
 
