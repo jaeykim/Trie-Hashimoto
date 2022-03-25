@@ -125,10 +125,10 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 			"/", int64(thMiningTime/time.Microsecond), "us",
 			"/", int64(thMiningTime/time.Millisecond), "ms)")
 		if len(common.MiningTimes) != 0 {
-		sumOfMiningTimes := int64(0)
-		for _, time := range common.MiningTimes {
-			sumOfMiningTimes += time
-		}
+			sumOfMiningTimes := int64(0)
+			for _, time := range common.MiningTimes {
+				sumOfMiningTimes += time
+			}
 			fmt.Println("average mining time for single trie node:", sumOfMiningTimes/int64(len(common.MiningTimes))/1000000, "ms (", sumOfMiningTimes/int64(len(common.MiningTimes))/1000, "us )")
 		}
 
@@ -170,13 +170,13 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 			common.BlockMiningTimes[int64(threads)] = append(common.BlockMiningTimes[int64(threads)], int64(miningTime/time.Microsecond))
 			
 			if len(common.BlockMiningTimes[int64(threads)]) % 100 == 0 {
-			fmt.Println("print block mining times with", threads, "threads")
-			blockMiningTimeSum := int64(0)
-			for _, time := range common.BlockMiningTimes[int64(threads)] {
+				fmt.Println("print block mining times with", threads, "threads")
+				blockMiningTimeSum := int64(0)
+				for _, time := range common.BlockMiningTimes[int64(threads)] {
 					// fmt.Print(time, " ")
-				blockMiningTimeSum += time
-			}
-			fmt.Println("")
+					blockMiningTimeSum += time
+				}
+				fmt.Println("")
 				fmt.Println("avg:", blockMiningTimeSum/int64(len(common.BlockMiningTimes[int64(threads)]))/1000, "ms (", blockMiningTimeSum/int64(len(common.BlockMiningTimes[int64(threads)])), "us ) for", len(common.BlockMiningTimes[int64(threads)]), "blocks\n")
 
 			}

@@ -448,9 +448,9 @@ search:
 
 			if DoReadHeader {
 
-			//
+				//
 				// mimicking ethash algorithm (consensus/ethash/algorithm.go -> "hashimoto" function) (jmlee)
-			//
+				//
 
 				// parameters for mining
 				mixBytes := 128
@@ -495,7 +495,7 @@ search:
 				for i, val := range mix {
 					binary.LittleEndian.PutUint32(digest[i*4:], val)
 				}
-			
+
 				// calculate new trie node hash
 				hash = h.makeHashNode(append(h.tmp, digest...))
 				// fmt.Println("changed hash with header:", common.BytesToHash(hash).Hex())/

@@ -307,11 +307,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 
 	// collect all block headers in memory for impt mining (jmlee)
 	if !trie.FakeIMPT && trie.DoReadHeader {
-	fmt.Println("collecting block headers from disk for trie-hashimoto mining")
+		fmt.Println("collecting block headers from disk for trie-hashimoto mining")
 		totalHeaderSize := 0
-	for i := uint64(0); i < common.NextBlockNumber; i++ {
-		blockHash := rawdb.ReadCanonicalHash(common.GlobalDB, i)						// get block header's hash
-		rlpedBlockHeader := rawdb.ReadHeaderRLP(common.GlobalDB, blockHash, i)			// get RLPed block header with block hash and block number
+		for i := uint64(0); i < common.NextBlockNumber; i++ {
+			blockHash := rawdb.ReadCanonicalHash(common.GlobalDB, i)						// get block header's hash
+			rlpedBlockHeader := rawdb.ReadHeaderRLP(common.GlobalDB, blockHash, i)			// get RLPed block header with block hash and block number
 			
 			// common.RLPedBlockHeaders = append(common.RLPedBlockHeaders, rlpedBlockHeader)	// add to memory
 			// totalHeaderSize += len(rlpedBlockHeader)
@@ -718,7 +718,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 
 	// add new block header to memory for impt mining (jmlee)
 	if !trie.FakeIMPT && trie.DoReadHeader {
-	rlpedBlockHeader := rawdb.ReadHeaderRLP(common.GlobalDB, block.Hash(), block.NumberU64())
+		rlpedBlockHeader := rawdb.ReadHeaderRLP(common.GlobalDB, block.Hash(), block.NumberU64())
 		// common.RLPedBlockHeaders = append(common.RLPedBlockHeaders, rlpedBlockHeader)
 
 		common.RLPedBlockHeadersUint32s = append(common.RLPedBlockHeadersUint32s, bytesToUint32s(rlpedBlockHeader)...)
