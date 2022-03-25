@@ -303,8 +303,10 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainReader, header, parent *
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
 func (ethash *Ethash) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
-	//return CalcDifficulty(chain.Config(), time, parent)
-	return parent.Difficulty // set difficulty as 0 for evaluation test (jmlee)
+	// return CalcDifficulty(chain.Config(), time, parent) // original code
+
+	// return parent.Difficulty // set difficulty as 0 for evaluation test, when genesis block's difficulty is 0 (jmlee)
+	return new(big.Int).Exp(big.NewInt(2), big.NewInt(16), big.NewInt(0)) // set low difficulty for relatively easy mining (jmlee)
 }
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
