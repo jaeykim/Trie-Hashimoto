@@ -64,6 +64,8 @@ var (
 	BlockMiningTimes = make(map[int64][]int64)
 	// block headers for impt mining (jmlee)
 	RLPedBlockHeaders = make([][]byte, 0)
+	// block headers for impt mining (convert headers to uint32 slice) (jmlee)
+	RLPedBlockHeadersUint32s []uint32
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.

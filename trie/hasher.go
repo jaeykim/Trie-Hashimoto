@@ -22,10 +22,12 @@ import (
 	"encoding/binary"
 	"bytes"
 	"math/rand"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -45,10 +47,11 @@ type keccakState interface {
 
 type sliceBuffer []byte
 
-var fakeIMPT bool = true	// forcely prefixing trie node's hash value with block number without mining
-var PrefixLength int = 2	// actually, this may be prefix bytes (ex. PrefixLength = 3 -> prefixes 6 characters)
-var doReadHeader bool = true	// using header while mining trie nodes
-var blockHeaderRange uint64 = common.NextBlockNumber
+const FakeIMPT bool = true	// forcely prefixing trie node's hash value with block number without mining
+const PrefixLength int = 2	// actually, this may be prefix bytes (ex. PrefixLength = 3 -> prefixes 6 characters)
+const DoReadHeader bool = true	// using header while mining trie nodes
+const loopAccesses int = 1 // Number of accesses in Trie-Hashimoto loop
+const EthashDatasetLen uint32 = 826277728 // Ethash dataset size (826277728: at block 8,000,000)
 
 func (b *sliceBuffer) Write(data []byte) (n int, err error) {
 	*b = append(*b, data...)
@@ -257,23 +260,47 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]uint64, i
 			} else if isMining && dirty {
 				// Used for HashWithNonce()
 				// Make new hashNode even if hashNode info already exists in cache
-				if fakeIMPT {
+				if FakeIMPT {
 					hash = h.makeHashNode(h.tmp)
 					hash = modifyHash(n, hash, blockNum)
 				} else {
-					nonce = trieNodeMining(n, blockNum, threads)
+					// fmt.Println("start measure!")
+					// get original node hash: node hash with nonce 0
+					var copyNode node
+					switch n := n.(type) {
+					case *shortNode:
+						copyNode = n.copy()
+					case *fullNode:
+						copyNode = n.copy()
+					}
+					h.tmp.Reset()
+					n.setNonce(0)
+					if err := rlp.Encode(&h.tmp, copyNode); err != nil {
+						panic("encode error: " + err.Error())
+					}
+					originalNodeHash := h.makeHashNode(h.tmp)
+
+					// start trie node mining
+					start1 := time.Now()
+					nonce = trieNodeMining(n, blockNum, threads, originalNodeHash)
+					elapsed1 := time.Since(start1)
+					// fmt.Println("end measure!")
+					common.MiningTimes = append(common.MiningTimes, int64(elapsed1/time.Nanosecond))
+					// fmt.Println("  => mining single node time:", int64(elapsed1/time.Millisecond), "ms\n")
+
 					h.tmp.Reset()
 					n.setNonce(nonce)
 					if err := rlp.Encode(&h.tmp, n); err != nil {
 						panic("encode error: " + err.Error())
 					}
-					hash = h.makeHashNode(h.tmp) // hash of trie node with certain nonce value
-					if doReadHeader {
-						// rehashing trie node with block header
-						randomBlockNum := common.BytesToHash(hash).Big().Uint64() % blockHeaderRange // determined by the trie node's hash
-						rlpedBlockHeader := common.RLPedBlockHeaders[randomBlockNum]
-						hash = h.makeHashNode(append(h.tmp, rlpedBlockHeader...))
+					hash = h.makeHashNode(h.tmp)
+					hash = modifyHash(n, hash, blockNum) // just set hash as we want (TODO: delete this later)
+					if DoReadHeader {
+						//
+						// TODO: need to hash with headers (jmlee)
+						//
 					}
+
 					if !validHash(hash, blockNum) {
 						panic("HashWithNonce error")
 					}	
@@ -284,7 +311,7 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]uint64, i
 				// Make new hashNode even if hashNode info already exists in cache
 				// Update normal MPT node to indexed MPT node
 				// Set nonce and generate new hashNode
-				if fakeIMPT {
+				if FakeIMPT {
 					hash = h.makeHashNode(h.tmp)
 					hash = modifyHash(n, hash, blockNum)				
 				} else {
@@ -340,7 +367,7 @@ func (h *hasher) store(n node, db *Database, force bool, trieNonces *[]uint64, i
 }
 
 // mining trie nodes with threads (sjkim)
-func trieNodeMining(n node, blockNum uint64, threads int) uint64 {
+func trieNodeMining(n node, blockNum uint64, threads int, originalNodeHash hashNode) uint64 {
 	var (
 		pend   sync.WaitGroup
 		abort  = make(chan struct{})
@@ -349,6 +376,8 @@ func trieNodeMining(n node, blockNum uint64, threads int) uint64 {
 	)
 	logger := log.New("miner_impt", -1)
 	logger.Trace("trieNodeMining started", "number", blockNum, "threads", threads)
+
+	// run goroutines
 	for i := 0; i < threads; i++ {
 		pend.Add(1)
 		go func(id int, nonce uint64) {
@@ -360,7 +389,7 @@ func trieNodeMining(n node, blockNum uint64, threads int) uint64 {
 			case *fullNode:
 				copyNode = n.copy()
 			}
-			imptMine(copyNode, id, blockNum, nonce, abort, locals)
+			imptMine(copyNode, id, blockNum, nonce, abort, locals, originalNodeHash)
 		}(i, rand.Uint64())
 	}
 	
@@ -381,7 +410,7 @@ search:
 	return result
 }
 
-func imptMine(n node, id int, blockNum uint64, seed uint64, abort chan struct{}, found chan uint64) {
+func imptMine(n node, id int, blockNum uint64, seed uint64, abort chan struct{}, found chan uint64, originalNodeHash hashNode) {
 	var (
 		attempts = int64(0)
 		nonce    = seed
@@ -391,6 +420,16 @@ func imptMine(n node, id int, blockNum uint64, seed uint64, abort chan struct{},
 
 	h := newHasher(nil)
 	defer returnHasherToPool(h)
+
+	// encode trie node (with any nonce)
+	h.tmp.Reset()
+	n.setNonce(0)
+	if err := rlp.Encode(&h.tmp, n); err != nil {
+		panic("encode error: " + err.Error())
+	}
+
+	var hash hashNode
+
 search:
 	for {
 		select {
@@ -403,47 +442,65 @@ search:
 		default:
 			// We don't have to update hash rate on every nonce, so update after after 2^X nonces
 			attempts++
-			/*
-			if (attempts % (1 << 15)) == 0 {
-				ethash.hashrate.Mark(attempts)
-				attempts = 0
-			}
-			*/
-
-			//
-			// get block header (jmlee)
-			//
-
-			// compute block header number for this nonce: i = hash(node || nonce) mod Height
-			h.tmp.Reset()
-			n.setNonce(nonce)
-			if err := rlp.Encode(&h.tmp, n); err != nil {
-				panic("encode error: " + err.Error())
-			}
-			hash := h.makeHashNode(h.tmp)
-
-			if doReadHeader {
-				//
-				// rehashing trie node with block header
-				//
-
-			// fmt.Println("node hash without block header:", common.BytesToHash(hash).Hex())
-				randomBlockNum := common.BytesToHash(hash).Big().Uint64() % blockHeaderRange
-
-				// get block header from memory
-				rlpedBlockHeader := common.RLPedBlockHeaders[randomBlockNum]
-
-			// Compute the PoW value of this nonce: s = hash(node || nonce || Headers[i])
-			hash = h.makeHashNode(append(h.tmp, rlpedBlockHeader...)) // hashing node with block header
 			
-			// print logs
-				// fmt.Println("get header's hash from disk -> blocknumber:", randomBlockNum, "/ nonce:", nonce)
-			// fmt.Println("get header's hash from disk -> blocknumber:", randomBlockNum, " / hash:", randomBlockHash.Hex())
-			// fmt.Println("elapsed time to get block header:", int(elapsed1.Nanoseconds()))
-			// fmt.Println("get header's rlp data from disk -> RLPed bytes:", rlpedBlockHeader)
-			// fmt.Println("header size:", len(rlpedBlockHeader))
-			// fmt.Println("changed hash with header data:", common.BytesToHash(hash).Hex())
-				// fmt.Println("")
+			// change nonce bytes in RLPed trie node
+			copy(h.tmp[len(h.tmp)-8:], i64tob(nonce))
+
+			if DoReadHeader {
+
+			//
+				// mimicking ethash algorithm (consensus/ethash/algorithm.go -> "hashimoto" function) (jmlee)
+			//
+
+				// parameters for mining
+				mixBytes := 128
+				hashBytes := 64
+				hashWords := uint32(16)
+
+				// Calculate the number of theoretical rows
+				rows := uint32(uint64(len(common.RLPedBlockHeadersUint32s)*4) / uint64(mixBytes))
+
+				// Combine hash+nonce into a 64 byte seed
+				seed := make([]byte, 40)
+				copy(seed, originalNodeHash)
+				binary.LittleEndian.PutUint64(seed[32:], nonce)
+
+				seed = crypto.Keccak512(seed)
+				seedHead := binary.LittleEndian.Uint32(seed)
+
+				// Start the mix with replicated seed
+				mix := make([]uint32, mixBytes/4)
+				for i := 0; i < len(mix); i++ {
+					mix[i] = binary.LittleEndian.Uint32(seed[i%16*4:])
+				}
+				// Mix in random dataset nodes
+				temp := make([]uint32, len(mix))
+
+				for i := 0; i < loopAccesses; i++ {
+					parent := fnv(uint32(i)^seedHead, mix[i%len(mix)]) % rows
+					// fmt.Println("in imptMine(): thread #", id, "-> parent:", parent, "/ rows:", rows)
+					for j := uint32(0); j < uint32(mixBytes/hashBytes); j++ {
+						offset := (2*parent+j) * hashWords
+						copy(temp[j*hashWords:], common.RLPedBlockHeadersUint32s[offset : offset+hashWords])
+					}
+					fnvHash(mix, temp)
+				}
+				// Compress mix
+				for i := 0; i < len(mix); i += 4 {
+					mix[i/4] = fnv(fnv(fnv(mix[i], mix[i+1]), mix[i+2]), mix[i+3])
+				}
+				mix = mix[:len(mix)/4]
+
+				digest := make([]byte, common.HashLength)
+				for i, val := range mix {
+					binary.LittleEndian.PutUint32(digest[i*4:], val)
+				}
+			
+				// calculate new trie node hash
+				hash = h.makeHashNode(append(h.tmp, digest...))
+				// fmt.Println("changed hash with header:", common.BytesToHash(hash).Hex())/
+			} else {
+				hash = h.makeHashNode(h.tmp)
 			}
 
 			// Correct nonce found
@@ -535,6 +592,32 @@ func _modifyHash(n node, hash hashNode) hashNode {
 		return newHash 
 	default:
 		return nil
+	}
+}
+
+// convert uint64 to bytes (jmlee)
+func i64tob(val uint64) []byte {
+	r := make([]byte, 8)
+	for i := uint64(0); i < 8; i++ {
+		r[i] = byte((val >> (i * 8)) & 0xff)
+	}
+	return r
+}
+
+// from consensus/ethash/algorithm.go
+// fnv is an algorithm inspired by the FNV hash, which in some cases is used as
+// a non-associative substitute for XOR. Note that we multiply the prime with
+// the full 32-bit input, in contrast with the FNV-1 spec which multiplies the
+// prime with one byte (octet) in turn.
+func fnv(a, b uint32) uint32 {
+	return a*0x01000193 ^ b
+}
+
+// from consensus/ethash/algorithm.go
+// fnvHash mixes in data into mix using the ethash fnv method.
+func fnvHash(mix []uint32, data []uint32) {
+	for i := 0; i < len(mix); i++ {
+		mix[i] = mix[i]*0x01000193 ^ data[i]
 	}
 }
 

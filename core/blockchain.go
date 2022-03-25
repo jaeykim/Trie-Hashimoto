@@ -178,6 +178,21 @@ type BlockChain struct {
 	terminateInsert func(common.Hash, uint64) bool // Testing hook used to terminate ancient receipt chain insertion.
 }
 
+// convert bytes to uint32s (jmlee)
+func bytesToUint32s(bytes []byte) []uint32 {
+	uint32s := make([]uint32, len(bytes)/4)
+	offset := uint32(0)
+	for i := uint32(0); i < uint32(len(bytes)/4); i++ {
+		r := uint32(0)
+		for j := uint32(0); j < 4; j++ {
+			r |= uint32(bytes[offset+j]) << (8 * j)
+		}
+		offset += 4
+		uint32s[i] = r
+	}
+	return uint32s
+}
+
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
@@ -291,11 +306,27 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	common.NextBlockNumber = bc.CurrentBlock().Header().Number.Uint64() + 1
 
 	// collect all block headers in memory for impt mining (jmlee)
+	if !trie.FakeIMPT && trie.DoReadHeader {
 	fmt.Println("collecting block headers from disk for trie-hashimoto mining")
+		totalHeaderSize := 0
 	for i := uint64(0); i < common.NextBlockNumber; i++ {
 		blockHash := rawdb.ReadCanonicalHash(common.GlobalDB, i)						// get block header's hash
 		rlpedBlockHeader := rawdb.ReadHeaderRLP(common.GlobalDB, blockHash, i)			// get RLPed block header with block hash and block number
-		common.RLPedBlockHeaders = append(common.RLPedBlockHeaders, rlpedBlockHeader)	// add to memory
+			
+			// common.RLPedBlockHeaders = append(common.RLPedBlockHeaders, rlpedBlockHeader)	// add to memory
+			// totalHeaderSize += len(rlpedBlockHeader)
+
+			common.RLPedBlockHeadersUint32s = append(common.RLPedBlockHeadersUint32s, bytesToUint32s(rlpedBlockHeader)...)
+		}
+
+		// for evaluation: fix dataset size for fair comparison with Ethash vs TH
+		if uint32(len(common.RLPedBlockHeadersUint32s)) >  trie.EthashDatasetLen {
+			fmt.Println("header dataset adjusted:", len(common.RLPedBlockHeadersUint32s), "->", trie.EthashDatasetLen)
+			common.RLPedBlockHeadersUint32s = common.RLPedBlockHeadersUint32s[:trie.EthashDatasetLen]
+		}
+
+		fmt.Println("  => common.NextBlockNumber -> total headers size:", totalHeaderSize, "bytes (", totalHeaderSize/1000000, "MB )")
+		fmt.Println("  => common.RLPedBlockHeadersUint32s -> len:", len(common.RLPedBlockHeadersUint32s), "(", len(common.RLPedBlockHeadersUint32s)*4/1000000, "MB )")
 	}
 
 	return bc, nil
@@ -686,8 +717,18 @@ func (bc *BlockChain) insert(block *types.Block) {
 	common.NextBlockNumber++
 
 	// add new block header to memory for impt mining (jmlee)
+	if !trie.FakeIMPT && trie.DoReadHeader {
 	rlpedBlockHeader := rawdb.ReadHeaderRLP(common.GlobalDB, block.Hash(), block.NumberU64())
-	common.RLPedBlockHeaders = append(common.RLPedBlockHeaders, rlpedBlockHeader)
+		// common.RLPedBlockHeaders = append(common.RLPedBlockHeaders, rlpedBlockHeader)
+
+		common.RLPedBlockHeadersUint32s = append(common.RLPedBlockHeadersUint32s, bytesToUint32s(rlpedBlockHeader)...)
+		fmt.Println("increased header dataset len:", len(common.RLPedBlockHeadersUint32s))
+
+		if uint32(len(common.RLPedBlockHeadersUint32s)) >  trie.EthashDatasetLen {
+			common.RLPedBlockHeadersUint32s = common.RLPedBlockHeadersUint32s[:trie.EthashDatasetLen]
+			fmt.Println("header dataset adjusted:", len(common.RLPedBlockHeadersUint32s))
+		}
+	}
 
 	// inspect leveldb stats
 	/*logData = "leveldbInfo\n" // lists with -> level,tables,size(MB),time(sec),read(MB),write(MB)

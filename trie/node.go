@@ -421,7 +421,7 @@ func miningTime(db ethdb.KeyValueReader, buf []byte, blockNum uint64, threads in
 
 	node := mustDecodeNode(buf, data)
 	startTime := time.Now()
-	_ = trieNodeMining(node, blockNum, threads) // simulateMining(node, blockNum)
+	_ = trieNodeMining(node, blockNum, threads, hashNode{}) // simulateMining(node, blockNum)
 	elapsedMiningTime := uint64(time.Since(startTime).Nanoseconds())
 
 	switch n := node.(type) {
