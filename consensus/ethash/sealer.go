@@ -129,8 +129,11 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 		for _, time := range common.MiningTimes {
 			sumOfMiningTimes += time
 		}
-		fmt.Println("average mining time for single trie node:", sumOfMiningTimes/int64(len(common.MiningTimes))/1000000, "ms")
+			fmt.Println("average mining time for single trie node:", sumOfMiningTimes/int64(len(common.MiningTimes))/1000000, "ms (", sumOfMiningTimes/int64(len(common.MiningTimes))/1000, "us )")
 		}
+
+		// runtime.GOMAXPROCS(runtime.NumCPU()) // use all CPU cores for goroutine
+		// fmt.Println("rumtime.GOMAXPROCS:", runtime.GOMAXPROCS(0)) // check # of cores to use
 
 		// Update block header's stateRoot field after IMPT mining
 		block.ModifyRoot(trieHash)
@@ -164,17 +167,20 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 				"(", int64(miningTime/time.Nanosecond), "ns", 
 				"/", int64(miningTime/time.Microsecond), "us",
 				"/", int64(miningTime/time.Millisecond), "ms)\n")
-			common.BlockMiningTimes[int64(threads)] = append(common.BlockMiningTimes[int64(threads)], int64(miningTime/time.Millisecond))
+			common.BlockMiningTimes[int64(threads)] = append(common.BlockMiningTimes[int64(threads)], int64(miningTime/time.Microsecond))
 			
+			if len(common.BlockMiningTimes[int64(threads)]) % 100 == 0 {
 			fmt.Println("print block mining times with", threads, "threads")
 			blockMiningTimeSum := int64(0)
 			for _, time := range common.BlockMiningTimes[int64(threads)] {
-				fmt.Print(time, " ")
+					// fmt.Print(time, " ")
 				blockMiningTimeSum += time
 			}
 			fmt.Println("")
-			fmt.Println("avg:",blockMiningTimeSum/int64(len(common.BlockMiningTimes[int64(threads)])), "ms")
+				fmt.Println("avg:", blockMiningTimeSum/int64(len(common.BlockMiningTimes[int64(threads)]))/1000, "ms (", blockMiningTimeSum/int64(len(common.BlockMiningTimes[int64(threads)])), "us ) for", len(common.BlockMiningTimes[int64(threads)]), "blocks\n")
 
+			}
+			
 			select {
 			case results <- result:
 			default:
@@ -230,9 +236,11 @@ search:
 				attempts = 0
 			}
 			// Compute the PoW value of this nonce
+			// comment: dataset.dataset: uint32 array's pointer => every thread shares this array (jmlee)
 			digest, result := hashimotoFull(dataset.dataset, hash, nonce)
 			if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
 				// Correct nonce found, create a new header with it
+				// fmt.Println("FIND CORRECT NONCE !!!")
 				header = types.CopyHeader(header)
 				header.Nonce = types.EncodeNonce(nonce)
 				header.MixDigest = common.BytesToHash(digest)

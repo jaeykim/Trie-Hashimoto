@@ -45,7 +45,7 @@ const (
 	hashWords          = 16      // Number of 32 bit ints in a hash
 	datasetParents     = 256     // Number of parents of each dataset element
 	cacheRounds        = 3       // Number of rounds in cache production
-	loopAccesses       = 64      // Number of accesses in hashimoto loop
+	loopAccesses       = 64      // Number of accesses in hashimoto loop (cannot be 0, jmlee)
 )
 
 // cacheSize returns the size of the ethash verification cache that belongs to a certain
