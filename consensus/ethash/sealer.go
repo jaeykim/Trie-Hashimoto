@@ -63,6 +63,14 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stat
 		return nil
 	}
 
+	if impt {
+		// in impt, require at least 200 txs
+		if len(block.Transactions()) < 200 {
+			log.Info("Sealing paused, waiting for transactions")
+			return nil
+		}
+	}
+
 	// If we're running a fake PoW, simply return a 0 nonce immediately
 	if ethash.config.PowMode == ModeFake || ethash.config.PowMode == ModeFullFake {
 		header := block.Header()
