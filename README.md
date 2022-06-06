@@ -1,6 +1,23 @@
-## IMPT
+## Trie-Hashimoto
 
-to measure block creation time with the IMPT policy
+On-chain Memory-Hard PoW Algorithm to Optimize Database of Account-based Blockchain
+
+To run the TH client, set datadir in init_th.sh and full_th.sh first, then:
+
+```shell
+$ make geth
+$ cd build/bin
+$ sh init_th.sh
+$ sh full_th.sh
+```
+
+Detailed options for TH in trie/hasher.go
+
+  * `FakeIMPT` forcely prefixing trie node's hash values with the current block number without mining
+  * `PrefixLength` length of bytes for the trie node prefixing
+  * `DoReadHeader` for memory hardness, reading block headers while mining
+  * `loopAccesses` how many iterations in TH mining
+  * `EthashDatasetLen` set the maximum size of dataset for Ethash mining (to compare TH vs Ethash fairly)
 
 ## Go Ethereum
 
