@@ -2,6 +2,8 @@
 
 On-chain Memory-Hard PoW Algorithm to Optimize Database of Account-based Blockchain
 
+## Geth Client
+
 To run the TH client, set `--datadir` in `init_th.sh` and `full_th.sh` in build/bin first, then:
 
 ```shell
@@ -11,13 +13,35 @@ $ sh init_th.sh
 $ sh full_th.sh
 ```
 
-Detailed options for TH in trie/hasher.go
+To run the original Ethash client, just remove `--impt` flag in `full_th.sh`
+
+Detailed options for the TH client in trie/hasher.go
 
   * `FakeIMPT` forcely prefixing trie node's hash values with the current block number without mining
   * `PrefixLength` length of bytes for the trie node prefixing
   * `DoReadHeader` for memory hardness, reading block headers while mining
   * `loopAccesses` how many iterations in TH mining
   * `EthashDatasetLen` set the maximum size of dataset for Ethash mining (to compare TH vs Ethash fairly)
+
+## Experiment Script
+
+To run the client sending transactions:
+
+```shell
+$ python3 impt_experiment.py
+```
+
+Detailed options for the client in impt_experiment.py
+
+  * `FULL_PORT` http port of the geth client
+  * `THREAD_COUNT` the number of multithreads to send transactions
+  * `INCREMENTAL_RECEIVER_ADDRESS` receiver addresses: incremental vs random
+  * `MAX_ADDRESS` set the upper bound of receiver addresses
+  * `INCREMENTAL_SEND_AMOUNT` tx amount: incremental vs 1 wei
+  * `isTH` the geth client's option: TH vs Ethash
+  * `threadNums` the list of the number of threads to participate in mining
+  * `totalTxNum` the number of total transactions to send
+  * `txPerBlock` the number of transactions per block
 
 ## Go Ethereum
 
