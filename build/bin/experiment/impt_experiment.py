@@ -1,7 +1,7 @@
 from web3 import Web3
 import sys
 #import socket
-#import random
+import random
 #import json
 #import rlp
 import time
@@ -20,25 +20,31 @@ ACCOUNT_NUM = int(sys.argv[1])
 TX_PER_BLOCK = 1
 MINING_THREAD_NUM = 8 # Geth's option
 
-# multiprocessing
-THREAD_COUNT = 8
+# multiprocessing to send transactions
+THREAD_COUNT = 1
 
 # tx arguments option
-INCREMENTAL_RECEIVER_ADDRESS = True # set tx receiver: incremental vs random
-INCREMENTAL_SEND_AMOUNT = True      # set send amount: incremental vs same (1 wei)
-MAX_ADDRESS = 0                     # set max address to set the receiver address upper bound (0 means there is no bound)
+INCREMENTAL_RECEIVER_ADDRESS = False # set tx receiver: incremental vs random
+MAX_ADDRESS = 100000000              # set max address to set the receiver address upper bound (0 means there is no bound)
+INCREMENTAL_SEND_AMOUNT = True       # set send amount: incremental vs same (1 wei)
 
 # providers
 fullnode = Web3(Web3.HTTPProvider("http://localhost:" + FULL_PORT))
 
 # functions
-def main():
+def main(accountNum, txPerBlock, miningThreadNum):
     
+    ACCOUNT_NUM = accountNum
+    TX_PER_BLOCK = txPerBlock
+    MINING_THREAD_NUM = miningThreadNum # Geth's mining option
+
     if ACCOUNT_NUM < TX_PER_BLOCK:
         print("too less accounts. at least", TX_PER_BLOCK, "accounts are needed")
         return
 
     print("Insert ", ACCOUNT_NUM, " accounts")
+    print("tx per block:", TX_PER_BLOCK)
+    print("geth mining thread:", MINING_THREAD_NUM, "\n")
 
     # unlock coinbase
     fullnode.geth.personal.unlockAccount(fullnode.eth.coinbase, PASSWORD, 0)
@@ -68,7 +74,7 @@ def main():
             print("inserted ", (i+1)*TX_PER_BLOCK, "accounts / elapsed time:", elapsed)
 
         # mining
-        fullnode.geth.miner.start(1)  # start mining
+        fullnode.geth.miner.start(MINING_THREAD_NUM)  # start mining with multiple threads
         while (fullnode.eth.blockNumber == currentBlock):
             pass # just wait for mining
         fullnode.geth.miner.stop()  # stop mining
@@ -95,11 +101,12 @@ def sendTransactions(num, offset):
         if INCREMENTAL_RECEIVER_ADDRESS:
             to = intToAddr(int(offset+i))
         else:
-            to = makeRandHex()
-
-        # if the upper bound is set, select receiver within the bound
-        if MAX_ADDRESS != 0:
-            to = intToAddr(random.randint(1, MAX_ADDRESS))
+            # if the upper bound is set, select receiver within the bound
+            if MAX_ADDRESS != 0:
+                to = intToAddr(random.randint(1, MAX_ADDRESS))
+            # just any random address
+            else:
+                to = makeRandHex()
 
         # to = "0xe4f853b9d237b220f0ECcdf55d224c54a30032Df"
         
@@ -138,10 +145,32 @@ if __name__ == "__main__":
 
     startTime = datetime.now()
     sendPool = Pool(THREAD_COUNT) # -> important: this should be in this "__main__" function
-    main()
+
+    isTH = False
+    threadNums = [96, 64, 60, 56, 52, 48, 44, 40, 32, 24, 16, 8, 4, 2, 1]
+
+    if not isTH:
+        # for ethash: mining 1000 blocks including 1 tx with 'threadNum' threads
+
+        for threadNum in threadNums:
+            main(999, 1, threadNum)
+            # main(1, 1, threadNum) # for test
+            elapsed = datetime.now() - startTime
+            print("elapsed time:", elapsed)
+            print("")
+        
+        for threadNum in threadNums:
+            main(1, 1, threadNum)
+    else:
+        # for TH: mining 1 block including 200 txs with 'threadNum' threads
+
+        for threadNum in threadNums:
+            main(200, 200, threadNum)
+            # main(1, 1, threadNum) # for test
+            elapsed = datetime.now() - startTime
+            print("elapsed time:", elapsed)
+            print("")
+
     elapsed = datetime.now() - startTime
-    print("elapsed time:", elapsed)
+    print("total elapsed time:", elapsed)
     print("DONE")
-
-
-
