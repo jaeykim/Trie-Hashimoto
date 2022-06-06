@@ -13,7 +13,7 @@ $ sh init_th.sh
 $ sh full_th.sh
 ```
 
-To run the original Ethash client, just remove `--impt` flag in `full_th.sh`
+To run the original Ethash client, just remove `--impt` flag in `full_th.sh` (IMPT stands for Indexed Merkle Patricia Trie)
 
 Detailed options for the TH client in `trie/hasher.go`
 
