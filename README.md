@@ -15,7 +15,7 @@ $ sh full_th.sh
 
 To run the original Ethash client, just remove `--impt` flag in `full_th.sh`
 
-Detailed options for the TH client in trie/hasher.go
+Detailed options for the TH client in `trie/hasher.go`
 
   * `FakeIMPT` forcely prefixing trie node's hash values with the current block number without mining
   * `PrefixLength` length of bytes for the trie node prefixing
@@ -31,7 +31,7 @@ To run the client sending transactions:
 $ python3 impt_experiment.py
 ```
 
-Detailed options for the client in impt_experiment.py
+Detailed options for the client in `impt_experiment.py`
 
   * `FULL_PORT` http port of the geth client
   * `THREAD_COUNT` the number of multithreads to send transactions
