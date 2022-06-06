@@ -15,11 +15,6 @@ from multiprocessing import Pool
 FULL_PORT = "8081"
 PASSWORD = "1234"
 
-# Account number
-ACCOUNT_NUM = int(sys.argv[1])
-TX_PER_BLOCK = 1
-MINING_THREAD_NUM = 8 # Geth's option
-
 # multiprocessing to send transactions
 THREAD_COUNT = 1
 
@@ -146,26 +141,30 @@ if __name__ == "__main__":
     startTime = datetime.now()
     sendPool = Pool(THREAD_COUNT) # -> important: this should be in this "__main__" function
 
-    isTH = False
+    isTH = True
     threadNums = [96, 64, 60, 56, 52, 48, 44, 40, 32, 24, 16, 8, 4, 2, 1]
 
     if not isTH:
-        # for ethash: mining 1000 blocks including 1 tx with 'threadNum' threads
+        # for ethash: sending 'totalTxNum' txs and mining blocks including 'txPerBlock' txs with 'threadNum' threads
+        totalTxNum = 1000
+        txPerBlock = 1
 
         for threadNum in threadNums:
-            main(999, 1, threadNum)
+            main(totalTxNum-txPerBlock, txPerBlock, threadNum)
             # main(1, 1, threadNum) # for test
             elapsed = datetime.now() - startTime
             print("elapsed time:", elapsed)
             print("")
         
         for threadNum in threadNums:
-            main(1, 1, threadNum)
+            main(txPerBlock, txPerBlock, threadNum)
     else:
-        # for TH: mining 1 block including 200 txs with 'threadNum' threads
+        # for TH: sending 'totalTxNum' txs and mining blocks including 'txPerBlock' txs with 'threadNum' threads
+        totalTxNum = 200
+        txPerBlock = 200
 
         for threadNum in threadNums:
-            main(200, 200, threadNum)
+            main(totalTxNum, txPerBlock, threadNum)
             # main(1, 1, threadNum) # for test
             elapsed = datetime.now() - startTime
             print("elapsed time:", elapsed)
