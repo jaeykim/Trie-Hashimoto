@@ -2,7 +2,7 @@
 
 On-chain Memory-Hard PoW Algorithm to Optimize Database of Account-based Blockchain
 
-To run the TH client, set `--datadir` in init_th.sh and full_th.sh first, then:
+To run the TH client, set `--datadir` in `init_th.sh` and `full_th.sh` in build/bin first, then:
 
 ```shell
 $ make geth
